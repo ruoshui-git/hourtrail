@@ -51,6 +51,7 @@ Work item picker, type, start and end (`datetime-local`), computed duration, not
 
 One line per behaviour change, newest first: `YYYY-MM-DD task-id: what changed and why`.
 
+- 2026-11-12 1.6: Session editor in a sheet: edits save on blur; manual entry uses "Add session"; end-before-start and nonexistent times are blocked, ambiguous times take the earlier instant; overlap, >16 h and future-start warnings; delete with Undo.
 - 2026-11-12 1.7: History: day header with previous, next and Today; ribbon; totals; trail rows per session slice ("Continued from yesterday", "Continues tomorrow"); gap rows of at least `long_gap_min` between the day's first and last sessions, with Add.
 - 2026-11-12 1.9: Settings > Backup downloads (or shares, on iPhone) a full backup file, shows the last backup date and cautions when none exists or it is over 30 days old; restore comes with cloud sync.
 - 2026-11-12 1.4: Items: search, Pinned, items grouped by project, Archived; item pages edit on blur and list the item's sessions; delete only for items with no sessions.
