@@ -77,7 +77,7 @@ Size: one coherent change reviewable in one sitting (roughly up to 600 changed l
 2. Run `scripts/agent/codex-usage`, choose the model, launch the runner with `run_in_background`. Carry on with other work.
 3. When notified, read `summary.txt` and `report.json`. Read `events.jsonl` only to diagnose a failure.
 4. Verify in the worktree: `scripts/agent/verify NAME` (format, lint, types, unit tests, build, E2E when the task touches UI or sync, all under `scripts/heavy`); read the whole diff against the brief and SPEC; compare test edits with intent (Codex has weakened assertions before); open every screenshot and check real data, Chinese text, both themes and 390 px width. A blank or loading screenshot is a failure.
-5. Fix rounds: trivial fixes yourself; substantive ones go back with `--resume SESSION` and a short fix brief (`--fork` if resume reports an active writer). After two rounds, take it over.
+5. Fix rounds: trivial fixes yourself; after any fix of your own, rerun `pnpm check` before committing (a review fix once broke lint on `main`); substantive ones go back with `--resume SESSION` and a short fix brief (`--fork` if resume reports an active writer). After two rounds, take it over.
 6. Commit in the worktree (Conventional Commit with a why-body), rebase on `main`, fast-forward merge, push, remove the worktree, update `docs/PROGRESS.md`, and add a changelog line to `UI_UX_DECISIONS.md` when behaviour changed.
 
 Screenshots need a Chinese font: Noto Sans CJK SC in `~/.local/share/fonts` (no sudo needed).
