@@ -7,7 +7,7 @@ Operational procedures: setup, deploy, keys, backups, restore and recovery. Arch
 1. Node 26 and pnpm 12 native Linux binaries in `~/.local/bin` (the global `wrangler` on PATH is a Windows binary and fails; always use `pnpm exec wrangler`).
 2. `pnpm install`
 3. `pnpm check` (format, lint, types, unit tests), `pnpm build`.
-4. Playwright browsers `chromium-1254` and `webkit-2388` must be in `~/.cache/ms-playwright` (they match the pinned Playwright 1.63.0). After a Playwright upgrade, run `pnpm exec playwright install chromium webkit`.
+4. Playwright browsers `chromium-1254` and `webkit-2388` must be in `~/.cache/ms-playwright` (they match the pinned Playwright 1.65.0). After a Playwright upgrade, run `pnpm exec playwright install chromium webkit`.
 5. Screenshots need Noto Sans CJK SC in `~/.local/share/fonts` (then `fc-cache -f`).
 6. Memory-heavy commands go through `scripts/heavy`, which shares the `temple_inventory` lock.
 

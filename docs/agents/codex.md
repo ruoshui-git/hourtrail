@@ -34,19 +34,19 @@ The Codex account is shared with the `temple_inventory` orchestrator, which also
 
 ## Fast mode
 
-Runs use fast mode (`-c service_tier="fast"`) by default; pass `--no-fast` to turn it off. Fast mode trades more usage for speed, so the usage policy above matters more, not less. Always pass model and effort explicitly: `~/.codex/config.toml` defaults to `gpt-6.1-sol` at low effort.
+Runs do **not** use fast mode by default (owner preference, 2026-11-12). `--fast` adds `-c service_tier="fast"`, which trades more usage for speed; use it only when the owner asks. Always pass model and effort explicitly: `~/.codex/config.toml` defaults to `gpt-6.1-sol` at low effort.
 
 ## `scripts/agent/codex-run`
 
 ```
 scripts/agent/codex-run NAME BRIEF [--model M] [--effort low|medium|high|xhigh]
                         [--resume SESSION | --fork SESSION] [--timeout MIN] [--stall MIN]
-                        [--no-fast] [--force-model]
+                        [--fast] [--force-model]
 ```
 
 1. Create `.worktrees/NAME` on `task/NAME` from `main` (reuse it on resume) and run `pnpm install --frozen-lockfile --prefer-offline` there.
 2. Create `.agent-runs/NAME/` (in the main checkout), copy the brief in, and assign a port block (`HT_PORT_BASE`) so dev servers and Playwright runs do not collide.
-3. Run `codex exec [resume|fork SESSION] --json -C <worktree> -m <model> -c model_reasoning_effort=… -c service_tier="fast" -c sandbox_mode="workspace-write" -c approval_policy="never" -c sandbox_workspace_write.network_access=true -c sandbox_workspace_write.writable_roots=[…] --output-schema scripts/agent/report.schema.json -o .agent-runs/NAME/report.json -` with the brief on stdin.
+3. Run `codex exec [resume|fork SESSION] --json -C <worktree> -m <model> -c model_reasoning_effort=… [-c service_tier="fast" with --fast] -c sandbox_mode="workspace-write" -c approval_policy="never" -c sandbox_workspace_write.network_access=true -c sandbox_workspace_write.writable_roots=[…] --output-schema scripts/agent/report.schema.json -o .agent-runs/NAME/report.json -` with the brief on stdin.
 4. Watchdog as above; write `exit` and `session`.
 5. Write and print `summary.txt`.
 
@@ -83,7 +83,7 @@ Screenshots need a Chinese font: Noto Sans CJK SC in `~/.local/share/fonts` (no 
 
 ## Smoke-run findings
 
-Smoke-tested on 2026-11-12 with `codex-cli 0.166.0`, `gpt-6-luna` at low effort in fast mode (a trivial function plus test, then one `--resume` fix round). About 1% of the 5-hour window for both rounds together; each round took under a minute.
+Smoke-tested on 2026-11-12 with `codex-cli 0.166.0`, `gpt-6-luna` at low effort in fast mode, before fast mode was turned off by default (a trivial function plus test, then one `--resume` fix round). About 1% of the 5-hour window for both rounds together; each round took under a minute.
 
 - `--json` writes one JSON object per line: `thread.started` (with `thread_id`, the session id), `turn.started`, `item.started`/`item.completed` (agent messages, commands, file changes), `turn.completed` (with token usage). No rate-limit data appears in the stream; `codex-usage` reads it from `~/.codex/sessions` instead.
 - `--output-schema` works for new runs **and on `exec resume`**: `report.json` was valid JSON matching the schema both times. The prose fallback was not needed.

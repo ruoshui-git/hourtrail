@@ -1,0 +1,18 @@
+{
+  "name": "@hourtrail/worker",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/write-headers.mjs",
+    "dev": "wrangler dev --port ${HT_PORT_BASE:-5170}",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20261112.1",
+    "typescript": "6.0.3",
+    "vitest": "5.1.0",
+    "wrangler": "4.160.1"
+  }
+}

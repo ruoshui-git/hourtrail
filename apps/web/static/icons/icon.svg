@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+	<!-- Three white blazes in the "start of trail" arrangement (one above two) on brand. -->
+	<rect width="512" height="512" fill="#1E3A31"/>
+	<g fill="#FFFFFF">
+		<rect x="220" y="96" width="72" height="150" rx="8"/>
+		<rect x="160" y="266" width="72" height="150" rx="8"/>
+		<rect x="280" y="266" width="72" height="150" rx="8"/>
+	</g>
+</svg>

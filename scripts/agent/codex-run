@@ -9,7 +9,7 @@ usage() {
 	cat >&2 <<'USAGE'
 Usage: codex-run NAME BRIEF [--model M] [--effort low|medium|high|xhigh]
                  [--resume SESSION | --fork SESSION] [--timeout MIN] [--stall MIN]
-                 [--no-fast] [--force-model]
+                 [--fast] [--force-model]
 
   NAME           Task name: worktree .worktrees/NAME, branch task/NAME, run dir .agent-runs/NAME.
   BRIEF          Brief file (front matter: owned, read_only, checks); - reads stdin.
@@ -19,7 +19,7 @@ Usage: codex-run NAME BRIEF [--model M] [--effort low|medium|high|xhigh]
   --fork ID      Continue in a new thread (when resume reports an active writer).
   --timeout MIN  End the run with exit 124 after MIN minutes (default 75).
   --stall MIN    End the run with exit 125 after MIN minutes without an event (default 15).
-  --no-fast      Do not use fast mode (service_tier="fast" is the default).
+  --fast         Use fast mode (service_tier="fast"). Off by default: the owner does not want it.
   --force-model  Launch even when the usage budget says to downgrade or hold.
 USAGE
 	exit 2
@@ -38,7 +38,7 @@ effort=medium
 mode=()
 timeout_min=75
 stall_min=15
-fast=1
+fast=0
 force=0
 while [[ $# -gt 0 ]]; do
 	case $1 in
@@ -48,7 +48,7 @@ while [[ $# -gt 0 ]]; do
 		--fork) mode=(fork "${2:?}"); shift 2 ;;
 		--timeout) timeout_min=${2:?}; shift 2 ;;
 		--stall) stall_min=${2:?}; shift 2 ;;
-		--no-fast) fast=0; shift ;;
+		--fast) fast=1; shift ;;
 		--force-model) force=1; shift ;;
 		*) usage ;;
 	esac

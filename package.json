@@ -13,13 +13,14 @@
     "lint": "eslint . && stylelint \"apps/web/src/**/*.{css,svelte}\"",
     "typecheck": "pnpm -r --workspace-concurrency=1 typecheck",
     "test": "pnpm -r --workspace-concurrency=1 test",
-    "build": "pnpm -r build",
+    "build": "pnpm --filter @hourtrail/web build && pnpm --filter @hourtrail/worker build",
     "e2e": "playwright test",
-    "shots": "playwright test --config playwright.shots.config.ts"
+    "shots": "playwright test --config playwright.shots.config.ts",
+    "preview": "pnpm build && pnpm --filter @hourtrail/worker dev"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
-    "@playwright/test": "1.63.0",
+    "@playwright/test": "1.65.0",
     "@types/node": "24.19.2",
     "eslint": "10.14.0",
     "eslint-plugin-svelte": "3.24.1",
