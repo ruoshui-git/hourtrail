@@ -13,7 +13,7 @@ test('searches, filters, selects, and restores a history result', async ({ page,
 	const result = page.getByText('库存管理系统开发', { exact: true }).first();
 	await expect(result).toBeVisible();
 	await page.getByRole('button', { name: 'Work', exact: true }).click();
-	await expect(page.getByText('1 sessions')).toBeVisible();
+	await expect(page.getByText('1 session,')).toBeVisible();
 	const shots = process.env.HT_RUN_DIR ? join(process.env.HT_RUN_DIR, 'shots') : undefined;
 	if (shots) {
 		await mkdir(shots, { recursive: true });
