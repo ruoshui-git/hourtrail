@@ -32,7 +32,7 @@ Gate 0 status (2026-11-12): automated part passed. Gallery screenshots in all fo
 | 1.7  | History: day navigation, TrailList, GapRow to manual entry, midnight slices                                                                                                    | Luna high ∥                   | done (Luna; review fixes: durations, overflow, gutter)                          |
 | 1.8a | App shell (route group, TabBar/Sidebar, toasts, placeholder destinations), built-in service worker with offline shell, update prompt, install hint, storage persistence helper | Luna high (Sol busy with 1.1) | done (Luna; review fix: typed nav routes)                                       |
 | 1.9  | Backup file download                                                                                                                                                           | Luna medium ∥                 | done (Sol, one clarification)                                                   |
-| 1.10 | E2E for scenarios A, B, C, D and local Unicode; kill-and-reload persistence tests                                                                                              | Luna high                     | todo                                                                            |
+| 1.10 | E2E for scenarios A, B, C, D and local Unicode; kill-and-reload persistence tests                                                                                              | Luna high                     | active (1.10-acceptance, Luna high)                                             |
 
 **Gate 1:** scenarios A–D pass in Chromium and WebKit; sessions survive reload, tab kill and an app update; owner uses it on the iPhone for real.
 
