@@ -138,6 +138,20 @@
 	--ht-dialog-min: 480px;
 	--ht-dialog-max: 560px;
 
+	/* Interaction (computed from ink so they follow the theme) */
+	--ht-hover: color-mix(in srgb, var(--ht-ink) 6%, transparent);
+	--ht-pressed: color-mix(in srgb, var(--ht-ink) 12%, transparent);
+	--ht-ink-hover: color-mix(in srgb, var(--ht-ink) 86%, var(--ht-paper));
+	--ht-press-scale: 0.98;
+
+	/* Icons, nav marker, bars */
+	--ht-icon: 20px;
+	--ht-icon-sm: 16px;
+	--ht-icon-stroke: 1.75;
+	--ht-nav-marker-w: 16px;
+	--ht-nav-marker-h: 4px;
+	--ht-bar: 8px;
+
 	/* Motion */
 	--ht-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
 	--ht-duration-press: 120ms;

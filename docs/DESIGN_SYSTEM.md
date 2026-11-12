@@ -103,10 +103,43 @@ Build these once in `apps/web/src/lib/components/` and show every one, in every 
 | `Sheet`                                         | Bottom sheet on phones (scrim, close button, safe-area padding, no drag gesture needed), centred dialog 480–560 px on desktop. Owns focus trapping and return.                                                                                                                                                                         |
 | `ConfirmDialog`, `Menu`, `Toast`, `Banner`      | Toasts sit above the tab bar for six seconds and can carry Undo. Banners are inline notices (neutral, caution, danger) with an icon and a sentence.                                                                                                                                                                                    |
 | `SyncBadge`                                     | Icon and words for the sync states in SPEC.md (What the user sees). Tapping opens sync details.                                                                                                                                                                                                                                        |
-| `TabBar` and `Sidebar`                          | Five destinations: Home, History, Items, Reports, Settings. Bottom bar with icon and label on phones; a 220 px sidebar from 1024 px. The selected item is ink with a small horizontal blaze; unselected items are `ink-2`.                                                                                                             |
+| `TabBar` and `Sidebar`                          | Five destinations: Home, History, Items, Reports, Settings. Bottom bar with icon and label on phones; a 220 px sidebar from 1024 px. The selected item is ink with a small horizontal blaze in ink (16 × 4, never a type colour); unselected items are `ink-2`.                                                                        |
 | `StatTile`, `BarChart`, `HBarList`, `DataTable` | Inline SVG charts drawn by hand, no chart library. Bars are mark colours with a 2 px gap between stacked segments, values in text beside or above, a table of the same numbers below every chart.                                                                                                                                      |
 | `EmptyState`                                    | One sentence and one action: "No sessions on this day. Add session".                                                                                                                                                                                                                                                                   |
 | `ReviewItem`                                    | Icon, one neutral sentence, and inline actions.                                                                                                                                                                                                                                                                                        |
+
+## States and details (added 2026-11-12, task 0.4)
+
+Decisions that fill gaps in the component table. Tokens named here live in `tokens.css`.
+
+**Interaction states.** Hover styles apply only under `@media (hover: hover)`.
+
+| State                      | Primary button                                                                                                       | Secondary, quiet, menu item, row      | Danger button               |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------- | --------------------------- |
+| Hover                      | fill `--ht-ink-hover`                                                                                                | background `--ht-hover`               | background `--ht-hover`     |
+| Pressed                    | fill `--ht-ink-hover`, `scale(var(--ht-press-scale))` over 120 ms                                                    | background `--ht-pressed`, same scale | same                        |
+| Disabled                   | fill `sunken`, text `ink-3`, no border                                                                               | text `ink-3`, border `line`           | text `ink-3`, border `line` |
+| Busy (transaction pending) | Disabled behaviour with the label unchanged and `aria-busy`; no spinner, because local writes settle in milliseconds | same                                  | same                        |
+
+Disabled controls use `aria-disabled` styling only when they must stay focusable (for an explanatory tooltip); otherwise the native `disabled` attribute.
+
+**Selection is ink.** Segmented control: a `sunken` track; the selected segment is `surface` with a `line-strong` border, ink text at weight 600; unselected segments are `ink-2`. Filter chips: unselected `line-strong` outline with `ink-2` text; selected ink fill with paper text. Switch: on is an ink track with a paper knob; off is a `sunken` track with a `line-strong` border and a `surface` knob; the label sits to the left and the whole row is the target.
+
+**Fields.** Error: border `danger`, and below the field an alert icon plus the message in `danger` (`label` size), linked with `aria-describedby`. Disabled: `sunken` background, `ink-3` text. Hints are `label` size in `ink-2`. The stepper is a 48 px field flanked by two 48 px secondary buttons (minus, plus) with a visible label above.
+
+**Overlays.** Sheet and dialog: `surface`, `--ht-shadow-overlay` and `--ht-overlay-border`, scrim `--ht-scrim`; a 44 px quiet close button with an X icon at the top right; the title in `heading`. The desktop dialog takes radius 20 on all corners. Menu: `surface`, overlay shadow and border, radius 12, items 44 high in `body`, destructive items in `danger`. Toast: `surface`, overlay shadow and border, radius 12, `body` text, at most `--ht-dialog-min` wide, centred above the tab bar (bottom-right on desktop); its actions are quiet buttons; six seconds, paused while hovered or focused; announced through a polite live region.
+
+**Banners** carry no box: an icon (20 px) in `ink-2`, `caution` or `danger`, the sentence in ink, an optional quiet action at the end, and a hairline above and below. The word for the state appears in the sentence ("Couldn't reach the cloud…"), so colour is never the only signal.
+
+**Icons.** Lucide, stroke width 1.75, `currentColor`, `--ht-icon` (20 px) in rows and buttons, `--ht-icon-sm` (16 px) beside captions. An icon-only button has an `aria-label` and a 44 px target.
+
+**Loading.** Local reads are immediate, so there are no skeletons or spinners for local data. The only waiting states are network ones, shown in words by `SyncBadge`.
+
+**Archived** types show an outline blaze: a 1 px border in the mark colour, no fill, and "Archived" in `ink-2` beside the name where the context needs it.
+
+**Charts.** `HBarList` bars are `--ht-bar` (8 px) thick on a `sunken` track with the value as text at the end. `BarChart` stacks use `--ht-stack-gap` between segments, captions in `caption` size, `line` gridlines, no axis lines other than the baseline. `StatTile`: the figure in `figure`, the label below it in `label`, `ink-2`; no box.
+
+**Theme.** `data-theme` on `<html>` (`light`, `dark`, or absent for system) is the only switch; components never read the theme.
 
 ## Voice
 
