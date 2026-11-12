@@ -10,7 +10,7 @@ test('shell boots without CSP or console errors', async ({ page }) => {
 	page.on('pageerror', (e) => errors.push(e.message));
 	const res = await page.goto('/');
 	expect(res?.headers()['content-security-policy']).toContain("script-src 'self' 'sha256-");
-	await expect(page.getByRole('heading', { name: 'Hourtrail' })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'Today' })).toBeVisible();
 	expect(errors).toEqual([]);
 });
 

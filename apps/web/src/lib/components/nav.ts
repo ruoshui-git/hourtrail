@@ -3,7 +3,9 @@ import { ChartColumn, History, House, ListChecks, Settings } from '@lucide/svelt
 
 export type Destination = 'home' | 'history' | 'items' | 'reports' | 'settings';
 
-export const DESTINATIONS: readonly { id: Destination; label: string; href: string }[] = [
+export type DestinationHref = '/' | '/history' | '/items' | '/reports' | '/settings';
+
+export const DESTINATIONS: readonly { id: Destination; label: string; href: DestinationHref }[] = [
 	{ id: 'home', label: 'Home', href: '/' },
 	{ id: 'history', label: 'History', href: '/history' },
 	{ id: 'items', label: 'Items', href: '/items' },

@@ -24,6 +24,7 @@ export function headersFile(hashes, security) {
 	lines.push('', '/_app/immutable/*', '  Cache-Control: public, max-age=31536000, immutable', '');
 	lines.push('/index.html', '  Cache-Control: no-cache', '');
 	lines.push('/manifest.webmanifest', '  Cache-Control: no-cache', '');
+	lines.push('/service-worker.js', '  Cache-Control: no-cache', '');
 	return lines.join('\n');
 }
 

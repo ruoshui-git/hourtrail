@@ -10,6 +10,7 @@ const config = {
 	},
 	kit: {
 		adapter: adapter({ fallback: 'index.html', strict: true }),
+		serviceWorker: { register: false },
 	},
 };
 

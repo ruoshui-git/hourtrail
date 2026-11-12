@@ -13,7 +13,7 @@
 			{@const selected = destination.id === current}
 			<li>
 				<a
-					href={resolve(destination.href as Parameters<typeof resolve>[0])}
+					href={resolve(destination.href)}
 					class:selected
 					aria-current={selected ? 'page' : undefined}
 				>
