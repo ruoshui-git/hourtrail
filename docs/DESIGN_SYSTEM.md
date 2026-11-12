@@ -137,7 +137,15 @@ Disabled controls use `aria-disabled` styling only when they must stay focusable
 
 **Archived** types show an outline blaze: a 1 px border in the mark colour, no fill, and "Archived" in `ink-2` beside the name where the context needs it.
 
-**Charts.** `HBarList` bars are `--ht-bar` (8 px) thick on a `sunken` track with the value as text at the end. `BarChart` stacks use `--ht-stack-gap` between segments, captions in `caption` size, `line` gridlines, no axis lines other than the baseline. `StatTile`: the figure in `figure`, the label below it in `label`, `ink-2`; no box.
+**Charts** (rules from the dataviz method, adapted to Blaze):
+
+- Bars and columns are blazes: at most 24 px thick (never fill the slot), radius `--ht-radius-blaze` at the data end and square at the baseline, growing from one baseline. Stacked segments and touching bars are separated by a `--ht-stack-gap` gap in the surface colour, never by a stroke. `HBarList` bars are `--ht-bar` (8 px) on a `sunken` track with the value as text at the end.
+- Gridlines are 1 px solid `line`; the only axis line is the baseline. Axis ticks are clean round numbers in `caption` size, `ink-2`, tabular figures.
+- Stack order and colour follow the type's `sort_key` and its blaze key, never rank; filtering never repaints a type.
+- Identity is never colour alone: a legend whenever two or more types appear (mark-shaped keys: a small blaze), direct labels only where they fit (a bar's total at its tip), and a `DataTable` with the same numbers under every chart. Text never takes a blaze colour.
+- Hover and keyboard focus: each bar or segment is its own target (with a hit area larger than the mark), lifts slightly (opacity change) and shows one tooltip listing every type for that bar, value first in ink, type name second with a blaze key. The tooltip enhances, never gates: every value is also in the table. Insert names as text, never as HTML.
+- `StatTile`: the figure in `figure` (display face, proportional figures), the label below it in `label`, `ink-2`, sentence case, no colon; no box.
+- Known limit, to raise at Gate 0: the palette validator finds Work (`lake`) and Overhead (`slate`) too close for some readers (normal-vision ΔE 13 light, 10 dark; floor 15), and `rowan`/`fern` too close under deuteranopia. The legend, labels, gaps and table above are mandatory partly for this reason.
 
 **Theme.** `data-theme` on `<html>` (`light`, `dark`, or absent for system) is the only switch; components never read the theme.
 
