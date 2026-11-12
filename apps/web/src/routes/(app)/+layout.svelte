@@ -3,16 +3,19 @@
 	import { Sidebar, TabBar } from '$lib/components';
 	import type { Destination } from '$lib/components/nav';
 	import type { Snippet } from 'svelte';
+	import SessionEditorHost from '$lib/features/session/SessionEditorHost.svelte';
 
 	let { children }: { children: Snippet } = $props();
+	// The first path segment names the destination, so /items/<id> still marks Items.
 	let current = $derived(
-		(page.url.pathname === '/' ? 'home' : page.url.pathname.slice(1)) as Destination,
+		(page.url.pathname === '/' ? 'home' : page.url.pathname.split('/')[1]) as Destination,
 	);
 </script>
 
 <div class="frame">
 	<aside class="desktop-nav"><Sidebar {current} /></aside>
 	<main>{@render children()}</main>
+	<SessionEditorHost />
 	<div class="mobile-nav"><TabBar {current} /></div>
 </div>
 
