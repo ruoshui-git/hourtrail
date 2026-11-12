@@ -12,3 +12,4 @@ export { default as Switch } from './Switch.svelte';
 export { default as Stepper } from './Stepper.svelte';
 export { default as SegmentedControl } from './SegmentedControl.svelte';
 export { default as FilterChip } from './FilterChip.svelte';
+export * from './index.domain';

@@ -147,6 +147,8 @@ Disabled controls use `aria-disabled` styling only when they must stay focusable
 - `StatTile`: the figure in `figure` (display face, proportional figures), the label below it in `label`, `ink-2`, sentence case, no colon; no box.
 - Known limit: the palette check finds `rowan`/`fern` and `rose`/`fern` close under deuteranopia, and `slate` close to `lake` for everyone (which is why Overhead defaults to `rose`, decided 2026-11-12). The legend, labels, gaps and table above are mandatory partly for this reason.
 
+**Running panel and navigation** (from task 0.4c): the type's blaze paints a full-height edge stripe (`--ht-blaze-lg-w`) down the panel's leading side, which is the element that paints in on Start. TabBar and Sidebar never hide themselves; the root layout renders one or the other by the 1024 px breakpoint. A running trail row shows "Running" in place of its end time; midnight rows say "Continued from yesterday" and "Continues tomorrow". Work item rows show "Type, Project" under the name.
+
 **Theme.** `data-theme` on `<html>` (`light`, `dark`, or absent for system) is the only switch; components never read the theme.
 
 ## Voice
