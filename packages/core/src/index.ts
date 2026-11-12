@@ -7,3 +7,5 @@ export * from './blaze';
 export * from './ids';
 export * from './schema';
 export * from './time';
+export * from './sync/mutation';
+export * from './sync/apply';

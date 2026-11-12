@@ -11,6 +11,7 @@ export const commonFields = {
 	rev: z.int().nonnegative(),
 	created_at: epochSchema,
 	updated_at: epochSchema,
+	updated_by: z.string(),
 	deleted_at: epochSchema.nullable(),
 };
 

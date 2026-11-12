@@ -18,7 +18,14 @@ import type { Entity, RecordOf, SettingKey } from './index';
 const id = '01234567-89ab-7cde-8fab-0123456789ab';
 const otherId = '550e8400-e29b-41d4-a716-446655440000';
 const text = '  库存管理系统开发 · 第1寺院 / 修复洗手台 🛠️ 👩🏽‍💻，"hello"! e\u0301\n\t';
-const common = { id, rev: 0, created_at: 123, updated_at: 456, deleted_at: null };
+const common = {
+	id,
+	rev: 0,
+	created_at: 123,
+	updated_at: 456,
+	updated_by: 'device-a',
+	deleted_at: null,
+};
 const fixtures: { [E in Entity]: RecordOf<E> } = {
 	activity_type: {
 		...common,
@@ -120,6 +127,9 @@ describe('synced record schemas', () => {
 			{ rev: '1' },
 			{ created_at: 0.1 },
 			{ updated_at: null },
+			{ updated_by: undefined },
+			{ updated_by: null },
+			{ updated_by: 1 },
 			{ deleted_at: '0' },
 			{ deleted_at: undefined },
 			{ created_at: Infinity },
@@ -288,6 +298,7 @@ describe('settings and default activity types', () => {
 				rev: 0,
 				created_at: 0,
 				updated_at: 0,
+				updated_by: '',
 				deleted_at: null,
 				archived_at: null,
 			},
@@ -301,6 +312,7 @@ describe('settings and default activity types', () => {
 				rev: 0,
 				created_at: 0,
 				updated_at: 0,
+				updated_by: '',
 				deleted_at: null,
 				archived_at: null,
 			},
@@ -314,6 +326,7 @@ describe('settings and default activity types', () => {
 				rev: 0,
 				created_at: 0,
 				updated_at: 0,
+				updated_by: '',
 				deleted_at: null,
 				archived_at: null,
 			},
@@ -327,6 +340,7 @@ describe('settings and default activity types', () => {
 				rev: 0,
 				created_at: 0,
 				updated_at: 0,
+				updated_by: '',
 				deleted_at: null,
 				archived_at: null,
 			},

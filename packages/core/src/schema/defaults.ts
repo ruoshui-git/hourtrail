@@ -9,6 +9,7 @@ const common = {
 	rev: 0,
 	created_at: 0,
 	updated_at: 0,
+	updated_by: '',
 	deleted_at: null,
 	archived_at: null,
 };
