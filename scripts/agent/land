@@ -37,6 +37,15 @@ if ! (cd "$wt" && pnpm check >"$repo/.agent-runs/$name/land-check.log" 2>&1); th
 	echo "land: pnpm check failed for $name; see .agent-runs/$name/land-check.log" >&2
 	exit 1
 fi
+# UI and sync changes also need the browser suite (a review fix once changed
+# wording that an E2E spec asserted, and only pnpm check ran).
+if git -C "$wt" diff --name-only main..HEAD | grep -qE '^(apps/|e2e/)'; then
+	if ! (cd "$wt" && HT_PORT_BASE=${HT_PORT_BASE:-5640} "$repo/scripts/heavy" pnpm e2e \
+		>"$repo/.agent-runs/$name/land-e2e.log" 2>&1); then
+		echo "land: E2E failed for $name; see .agent-runs/$name/land-e2e.log" >&2
+		exit 1
+	fi
+fi
 git -C "$repo" merge -q --ff-only "task/$name"
 git -C "$repo" push -q
 git -C "$repo" worktree remove --force "$wt"
