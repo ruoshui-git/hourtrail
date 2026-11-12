@@ -38,15 +38,15 @@ Gate 0 status (2026-11-12): automated part passed. Gallery screenshots in all fo
 
 ## Milestone 2: daily organisation
 
-| ID  | Task                                                                                      | Who                             | Status                           |
-| --- | ----------------------------------------------------------------------------------------- | ------------------------------- | -------------------------------- |
-| 2.1 | Switch flow polish and the two-running resolver                                           | Luna high                       | active (2.1-switch, Luna high)   |
-| 2.2 | `core` split, merge and overlap detection; editor actions                                 | Sol high, then Luna medium      | todo                             |
-| 2.3 | `core/review`; Daily review screen; Home's review row                                     | Sol high, then Luna high        | todo                             |
-| 2.4 | Places library: add, edit, radius, merge duplicates, archive                              | Luna medium ∥                   | active (2.4-places, Luna medium) |
-| 2.5 | `core` place matching; capture on Start and Stop; unknown-place prompts; privacy controls | Sol high, then Luna high        | todo                             |
-| 2.6 | Search and filters; desktop two-pane History                                              | Luna high                       | todo                             |
-| 2.7 | Desktop layout pass across all screens                                                    | Luna medium, your visual review | todo                             |
+| ID  | Task                                                                                      | Who                             | Status                                                |
+| --- | ----------------------------------------------------------------------------------------- | ------------------------------- | ----------------------------------------------------- |
+| 2.1 | Switch flow polish and the two-running resolver                                           | Luna high                       | done (Luna; review fix: resolution labels with times) |
+| 2.2 | `core` split, merge and overlap detection; editor actions                                 | Sol high, then Luna medium      | todo                                                  |
+| 2.3 | `core/review`; Daily review screen; Home's review row                                     | Sol high, then Luna high        | todo                                                  |
+| 2.4 | Places library: add, edit, radius, merge duplicates, archive                              | Luna medium ∥                   | active (2.4-places, Luna medium)                      |
+| 2.5 | `core` place matching; capture on Start and Stop; unknown-place prompts; privacy controls | Sol high, then Luna high        | todo                                                  |
+| 2.6 | Search and filters; desktop two-pane History                                              | Luna high                       | todo                                                  |
+| 2.7 | Desktop layout pass across all screens                                                    | Luna medium, your visual review | todo                                                  |
 
 **Gate 2:** scenario E with mocked geolocation (sure, suggested, ambiguous, unresolved, low accuracy, denied, timed out) and on the real phone; review flows; Start never waits on GPS (test with a geolocation call that never returns).
 
@@ -103,7 +103,6 @@ PRD section 18's failure list maps to tests you must see pass: repeated taps (un
 
 - Polish list for task 4.6: session editor's work-item picker shows a search box and a select with the same name (cluttered); Backup page back link is a plain link while other Settings pages use a back button; Home date heading sits flush against the running panel on phones; DataTable period column wraps on phones ("Sep / 14"); a disabled quiet button shows an outline.
 - Task 3.4 decides pending dots before first sign-in: today every row shows one because nothing has synced; consider hiding them until the device has signed in once.
-- Task 2.1 should consolidate Home's duplicated state (`runningSnapshot`, `refreshedItems`, `refreshedSessions`) into the live queries.
 - Performance note: `repo.running()` scans all sessions (IndexedDB cannot index null `end_at`); fine for thousands of sessions, revisit with a maintained running-session index if Start ever measures slow.
 
 - 2026-11-12: Repository bootstrapped. Codex 5-hour window was 38% used at the start (shared with the temple_inventory orchestrator).
