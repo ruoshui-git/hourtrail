@@ -51,4 +51,5 @@ Work item picker, type, start and end (`datetime-local`), computed duration, not
 
 One line per behaviour change, newest first: `YYYY-MM-DD task-id: what changed and why`.
 
+- 2026-11-12 0.4a: Added the unlinked /dev/gallery with a theme control (System, Light, Dark) and repeatable phone and desktop screenshots in both themes.
 - 2026-11-12 0.1: Initial screens and flows split from the implementation plan.
