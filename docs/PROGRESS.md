@@ -31,7 +31,7 @@ Gate 0 status (2026-11-12): automated part passed. Gallery screenshots in all fo
 | 1.6  | Session editor, manual entry, delete with undo, validation and warnings                                                                                                        | Luna high                     | active (1.6-session-editor, Luna high)                                          |
 | 1.7  | History: day navigation, TrailList, GapRow to manual entry, midnight slices                                                                                                    | Luna high ∥                   | active (1.7-history, Luna high)                                                 |
 | 1.8a | App shell (route group, TabBar/Sidebar, toasts, placeholder destinations), built-in service worker with offline shell, update prompt, install hint, storage persistence helper | Luna high (Sol busy with 1.1) | done (Luna; review fix: typed nav routes)                                       |
-| 1.9  | Backup file download                                                                                                                                                           | Luna medium ∥                 | active (1.9-backup, Sol high: core format + download)                           |
+| 1.9  | Backup file download                                                                                                                                                           | Luna medium ∥                 | done (Sol, one clarification)                                                   |
 | 1.10 | E2E for scenarios A, B, C, D and local Unicode; kill-and-reload persistence tests                                                                                              | Luna high                     | todo                                                                            |
 
 **Gate 1:** scenarios A–D pass in Chromium and WebKit; sessions survive reload, tab kill and an app update; owner uses it on the iPhone for real.
@@ -101,7 +101,7 @@ PRD section 18's failure list maps to tests you must see pass: repeated taps (un
 
 ## Notes
 
-- Polish list for task 4.6: Home date heading sits flush against the running panel on phones; DataTable period column wraps on phones ("Sep / 14"); a disabled quiet button shows an outline.
+- Polish list for task 4.6: Backup page back link is a plain link while other Settings pages use a back button; Home date heading sits flush against the running panel on phones; DataTable period column wraps on phones ("Sep / 14"); a disabled quiet button shows an outline.
 - Task 2.1 should consolidate Home's duplicated state (`runningSnapshot`, `refreshedItems`, `refreshedSessions`) into the live queries.
 - Performance note: `repo.running()` scans all sessions (IndexedDB cannot index null `end_at`); fine for thousands of sessions, revisit with a maintained running-session index if Start ever measures slow.
 
