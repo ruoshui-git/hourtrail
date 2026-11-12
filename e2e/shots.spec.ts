@@ -17,6 +17,15 @@ for (const route of SHOT_ROUTES) {
 		}
 		await page.goto(route.path);
 		await expect(page.locator('main h1')).toBeVisible();
+		// Live queries fill the page asynchronously after the heading renders: wait
+		// until the main content stops changing (checked every 250 ms, up to 5 s).
+		let previous = '';
+		for (let i = 0; i < 20; i++) {
+			const text = await page.locator('main').innerText();
+			if (text === previous) break;
+			previous = text;
+			await page.waitForTimeout(250);
+		}
 		// SvelteKit's SPA fallback mounts asynchronously. A usable control proves hydration.
 		if (route.name === 'gallery') {
 			await expect(page.getByRole('radio', { name: 'System', exact: true })).toBeChecked();
