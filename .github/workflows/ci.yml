@@ -15,7 +15,7 @@ permissions:
 jobs:
   check:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
@@ -26,3 +26,57 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm check
       - run: pnpm build
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium webkit
+      - run: pnpm e2e
+        env:
+          CI: 'true'
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: playwright-results
+          path: test-results/
+          retention-days: 7
+      - uses: actions/upload-artifact@v7
+        with:
+          name: web-build
+          path: apps/web/build/
+          include-hidden-files: true
+          retention-days: 3
+
+  deploy-staging:
+    needs: check
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: staging
+    concurrency:
+      group: deploy-staging
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Check deploy credentials
+        id: creds
+        env:
+          TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "CLOUDFLARE_API_TOKEN is not set; skipping the staging deploy." >> "$GITHUB_STEP_SUMMARY"
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.creds.outputs.ok == 'true'
+        run: pnpm build
+      - if: steps.creds.outputs.ok == 'true'
+        working-directory: apps/worker
+        run: pnpm exec wrangler deploy --env staging
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
