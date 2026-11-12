@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+# Land a verified task: rebase its committed branch on main, require `pnpm check`
+# to pass, fast-forward main, push, and remove the worktree and branch.
+# Stops (and changes nothing on main) if the rebase or the check fails.
+# Usage: land NAME
+
+name=${1:?Usage: land NAME}
+export PATH="$HOME/.local/bin:$PATH"
+here=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+repo=$(dirname -- "$(git -C "$here" rev-parse --path-format=absolute --git-common-dir)")
+wt=$repo/.worktrees/$name
+[[ -z $(git -C "$wt" status --porcelain) ]] || { echo "land: $name has uncommitted changes" >&2; exit 1; }
+git -C "$wt" rebase -q main
+(cd "$wt" && pnpm install --frozen-lockfile --prefer-offline --reporter=silent)
+if ! (cd "$wt" && pnpm check >"$repo/.agent-runs/$name/land-check.log" 2>&1); then
+	echo "land: pnpm check failed for $name; see .agent-runs/$name/land-check.log" >&2
+	exit 1
+fi
+git -C "$repo" merge -q --ff-only "task/$name"
+git -C "$repo" push -q
+git -C "$repo" worktree remove --force "$wt"
+git -C "$repo" branch -q -D "task/$name"
+echo "land: $name merged at $(git -C "$repo" rev-parse --short HEAD)"

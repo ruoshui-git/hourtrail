@@ -45,6 +45,20 @@ export default ts.config(
 		},
 	},
 	{
+		// Fixed dates in tests need an explicit offset: CI runs in UTC and the browser in New York.
+		files: ['e2e/**/*.ts', '**/*.test.ts'],
+		rules: {
+			'no-restricted-syntax': [
+				'error',
+				{
+					selector:
+						"NewExpression[callee.name='Date'] > Literal[value=/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(:\\d{2})?$/]",
+					message: 'Give fixed test dates an explicit UTC offset (for example -05:00 or Z).',
+				},
+			],
+		},
+	},
+	{
 		// core stays pure: no browser or Worker globals.
 		files: ['packages/core/src/**/*.ts'],
 		languageOptions: { globals: {} },

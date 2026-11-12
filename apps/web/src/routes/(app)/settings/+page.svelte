@@ -31,6 +31,14 @@
 			>
 				<span>{section}</span><ChevronRight aria-hidden="true" />
 			</a>
+		{:else if section === 'Places'}
+			<a
+				class="row"
+				href={resolve('/settings/places')}
+				aria-current={active === 'places' ? 'page' : undefined}
+			>
+				<span>{section}</span><ChevronRight aria-hidden="true" />
+			</a>
 		{:else if section === 'Backup'}
 			<a
 				class="row"

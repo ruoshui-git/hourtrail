@@ -38,15 +38,15 @@ Gate 0 status (2026-11-12): automated part passed. Gallery screenshots in all fo
 
 ## Milestone 2: daily organisation
 
-| ID  | Task                                                                                      | Who                             | Status                                                |
-| --- | ----------------------------------------------------------------------------------------- | ------------------------------- | ----------------------------------------------------- |
-| 2.1 | Switch flow polish and the two-running resolver                                           | Luna high                       | done (Luna; review fix: resolution labels with times) |
-| 2.2 | `core` split, merge and overlap detection; editor actions                                 | Sol high, then Luna medium      | todo                                                  |
-| 2.3 | `core/review`; Daily review screen; Home's review row                                     | Sol high, then Luna high        | todo                                                  |
-| 2.4 | Places library: add, edit, radius, merge duplicates, archive                              | Luna medium ∥                   | active (2.4-places, Luna medium)                      |
-| 2.5 | `core` place matching; capture on Start and Stop; unknown-place prompts; privacy controls | Sol high, then Luna high        | todo                                                  |
-| 2.6 | Search and filters; desktop two-pane History                                              | Luna high                       | active (2.6-search, Luna high)                        |
-| 2.7 | Desktop layout pass across all screens                                                    | Luna medium, your visual review | todo                                                  |
+| ID  | Task                                                                                      | Who                             | Status                                                                             |
+| --- | ----------------------------------------------------------------------------------------- | ------------------------------- | ---------------------------------------------------------------------------------- |
+| 2.1 | Switch flow polish and the two-running resolver                                           | Luna high                       | done (Luna; review fix: resolution labels with times)                              |
+| 2.2 | `core` split, merge and overlap detection; editor actions                                 | Sol high, then Luna medium      | todo                                                                               |
+| 2.3 | `core/review`; Daily review screen; Home's review row                                     | Sol high, then Luna high        | todo                                                                               |
+| 2.4 | Places library: add, edit, radius, merge duplicates, archive                              | Luna medium ∥                   | done (Luna, one finishing round)                                                   |
+| 2.5 | `core` place matching; capture on Start and Stop; unknown-place prompts; privacy controls | Sol high, then Luna high        | active: 2.5a core matching done (Luna); 2.5b capture, prompts, privacy (Luna high) |
+| 2.6 | Search and filters; desktop two-pane History                                              | Luna high                       | active (2.6-search, Luna high)                                                     |
+| 2.7 | Desktop layout pass across all screens                                                    | Luna medium, your visual review | todo                                                                               |
 
 **Gate 2:** scenario E with mocked geolocation (sure, suggested, ambiguous, unresolved, low accuracy, denied, timed out) and on the real phone; review flows; Start never waits on GPS (test with a geolocation call that never returns).
 
