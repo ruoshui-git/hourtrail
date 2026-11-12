@@ -165,6 +165,8 @@ envv=(
 	"HT_PORT_BASE=$port"
 	"HT_RUN_DIR=$run"
 	"HT_HEAVY_LOCK=$heavy_lock"
+	# Wrangler writes config and logs here; the real ~/.config (with its login) stays out of reach.
+	"XDG_CONFIG_HOME=/tmp/hourtrail-xdg-config"
 )
 
 echo $$ >"$run/pid"
