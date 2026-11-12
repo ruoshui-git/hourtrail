@@ -51,6 +51,7 @@ Work item picker, type, start and end (`datetime-local`), computed duration, not
 
 One line per behaviour change, newest first: `YYYY-MM-DD task-id: what changed and why`.
 
+- 2026-11-12 0.4d: Added stat tiles, the stacked bar chart, the bar list and the data table to the gallery. Column totals show only where they fit; the tooltip and table always carry every number.
 - 2026-11-12 0.4c: Added the running panel, day ribbon, trail list, gap and work item rows, review items, tab bar, sidebar and sync badge to the gallery.
 - 2026-11-12 0.4a: Added the unlinked /dev/gallery with a theme control (System, Light, Dark) and repeatable phone and desktop screenshots in both themes.
 - 2026-11-12 0.1: Initial screens and flows split from the implementation plan.
