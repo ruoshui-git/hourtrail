@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+# Run one memory-heavy command (build, Playwright, full test run) at a time.
+# Shares temple_inventory's lock when that checkout exists, so heavy work from
+# both projects queues instead of competing for the WSL VM's memory.
+
+if [[ $# -eq 0 ]]; then
+	echo "Usage: heavy COMMAND [ARGS...]" >&2
+	exit 2
+fi
+
+shared=$HOME/code/frappe_docker_wsl/development/.locks
+if [[ -n ${HT_HEAVY_LOCK:-} ]]; then
+	lock=$HT_HEAVY_LOCK
+elif [[ -d $shared ]]; then
+	lock=$shared/heavy.lock
+else
+	lock=/tmp/hourtrail-heavy.lock
+fi
+exec 9>>"$lock"
+if ! flock -n 9; then
+	echo "heavy: waiting for another heavy command to finish ($lock)" >&2
+	flock 9
+fi
+"$@"

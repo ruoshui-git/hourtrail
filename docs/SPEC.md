@@ -1,0 +1,279 @@
+# Hourtrail technical specification
+
+Source of truth for architecture, data model, sync, security and platform limits. Behaviour comes from [PRD.md](PRD.md); visuals from [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md); screens and flows from [UI_UX_DECISIONS.md](UI_UX_DECISIONS.md). If this document conflicts with the PRD, the PRD wins unless the owner decisions below say otherwise.
+
+## Owner decisions
+
+| Topic                  | Decision                                                                                                                                                                                                                                                                                                                                                                    |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Sign-in                | One long random **account key**, entered once per device. Each device then holds its own revocable long-lived session. A signed-in device can link another by QR code. No passwords, no email, no third-party identity.                                                                                                                                                     |
+| Address                | Free `workers.dev` addresses: `hourtrail.<account>.workers.dev` (production) and `hourtrail-staging.<account>.workers.dev`. An installed iPhone app is tied to its origin, so the production origin must exist from Milestone 1 and never change.                                                                                                                           |
+| Independent backup     | Nightly encrypted database dump committed to a private GitHub repo, plus the in-app backup file.                                                                                                                                                                                                                                                                            |
+| Backup encryption      | Dumps are encrypted with `age`; the owner keeps the private key in their password manager.                                                                                                                                                                                                                                                                                  |
+| GitHub                 | You may create two **private** repos under `ruoshui-git` (`hourtrail`, `hourtrail-backups`), push, and configure Actions without asking again.                                                                                                                                                                                                                              |
+| Raw GPS                | Raw coordinates stay on the capturing device by default. Named places and each session's assigned place always sync. A Settings toggle turns raw-coordinate sync on.                                                                                                                                                                                                        |
+| Bare Start             | Home has a Start button that begins an untitled session at once; the work item is named later. Daily review lists sessions still untitled.                                                                                                                                                                                                                                  |
+| Visual direction       | "Blaze" (DESIGN_SYSTEM.md).                                                                                                                                                                                                                                                                                                                                                 |
+| Framework              | Svelte 5, at the owner's preference. Vue offered nothing this app needs that Svelte lacks.                                                                                                                                                                                                                                                                                  |
+| Default activity types | Four: Work, **Overhead** (work-related time such as meetings that does not count toward work hours), Volunteer, Personal.                                                                                                                                                                                                                                                   |
+| Implementation agents  | Codex via `codex exec` in fast mode (`service_tier="fast"`): `gpt-6-luna` by default, `gpt-6.1-sol` for the hard parts **only when the shared 5-hour Codex window has room** (another orchestrator uses the same account; see `docs/agents/codex.md`). Do not use `gpt-6-astra`. When Codex keeps failing, implement it yourself or use a Claude subagent (Sonnet or Opus). |
+| Parallelism            | Several Codex tasks at once is fine (five have run together on this machine); use your discretion (docs/agents/codex.md).                                                                                                                                                                                                                                                   |
+
+## Architecture
+
+One Cloudflare Worker serves the built PWA as static assets and an API under `/api/*`, backed by one D1 database. All reading, editing, review and reporting run in the browser against a full local replica in IndexedDB; the server is a sync authority, an auth gate and a reminder sender. Nothing else is hosted.
+
+| Layer          | Choice                                                                                                                                                                                                                                                                                                                                          | Why                                                                                                                                                                                                                                                                                                                                                          |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Workspace      | pnpm workspace, TypeScript strict, Node 26 on the WSL host                                                                                                                                                                                                                                                                                      | Host `node`/`pnpm` at `~/.local/bin` are native Linux. The global `wrangler` on PATH is a Windows binary and fails; always use `pnpm exec wrangler`.                                                                                                                                                                                                         |
+| Web app        | Svelte 5 in runes mode + SvelteKit as a pure client-side SPA (`adapter-static` with `fallback: "index.html"`, `ssr = false` and `prerender = false` in the root layout) + Vite                                                                                                                                                                  | The owner prefers Svelte; it also gives a smaller offline shell and less boilerplate. SvelteKit is the supported routing path and the one coding agents know best. Set `compilerOptions.runes = true` so Svelte 4 syntax (`export let`, `$:`) is a compile error, since weaker models mix the two. Pinned versions are recorded at the end of this document. |
+| Service worker | `@vite-pwa/sveltekit` with `injectManifest` (verify it supports the pinned SvelteKit; otherwise use SvelteKit's built-in `src/service-worker.ts` with its `$service-worker` file list)                                                                                                                                                          | Precaching with revisioning, plus our own push handlers.                                                                                                                                                                                                                                                                                                     |
+| Local data     | Dexie 4 over IndexedDB                                                                                                                                                                                                                                                                                                                          | Reliable on Safari, transactional, has live queries. Wrap `liveQuery` once in `apps/web/src/lib/live.svelte.ts` and use only that helper in components.                                                                                                                                                                                                      |
+| UI primitives  | Bits UI v2 (headless Svelte 5 dialog, popover, menu, combobox, switch, tabs) styled only with the tokens in DESIGN_SYSTEM.md; Lucide's Svelte icon package (verify the current package name)                                                                                                                                                    | Accessibility without a visual framework. No Tailwind, no component kit.                                                                                                                                                                                                                                                                                     |
+| Dates          | `temporal-polyfill`, used only inside `packages/core/src/time`                                                                                                                                                                                                                                                                                  | Correct IANA zone and DST arithmetic on every browser.                                                                                                                                                                                                                                                                                                       |
+| Spreadsheet    | `write-excel-file`, lazy-loaded                                                                                                                                                                                                                                                                                                                 | Small, browser-side, typed cells.                                                                                                                                                                                                                                                                                                                            |
+| API            | Hono + zod on Workers, Workers Static Assets with SPA fallback and `run_worker_first` for `/api/*`                                                                                                                                                                                                                                              | One origin, so cookies and service-worker scope stay simple.                                                                                                                                                                                                                                                                                                 |
+| Database       | D1 (SQLite)                                                                                                                                                                                                                                                                                                                                     | Named in the PRD, has `wrangler d1 export` for the nightly dump.                                                                                                                                                                                                                                                                                             |
+| Scheduled work | One Cron Trigger, every 5 minutes                                                                                                                                                                                                                                                                                                               | Forgotten-session reminders.                                                                                                                                                                                                                                                                                                                                 |
+| Tests          | Vitest (unit; `fake-indexeddb` for the repository layer; `@testing-library/svelte` for components), `svelte-check` for types, `@cloudflare/vitest-pool-workers` for the Worker against local D1 (verify it supports the pinned Vitest; otherwise run plain Vitest against `wrangler dev`), Playwright with Chromium and a WebKit iPhone profile | Browsers `chromium-1254` and `webkit-2388` are already in `~/.cache/ms-playwright`; match the Playwright version or run `playwright install`.                                                                                                                                                                                                                |
+
+Shared logic lives in `packages/core` as pure functions with no browser or Worker APIs: schemas, ids, time, mutation apply and merge, review rules, report aggregation, place matching, backup format, CSV. Both the web app and the Worker import it. Keep everything that can be pure in there; it is where correctness is tested.
+
+### Repository layout
+
+```
+apps/web/            SvelteKit SPA (src/routes, src/lib/features, src/lib/components, src/lib/styles, src/service-worker.ts)
+apps/worker/         Worker: src/index.ts, routes/, migrations/, wrangler.jsonc (envs: staging, production)
+packages/core/       pure domain logic + zod schemas + tests
+e2e/                 Playwright specs, one file per acceptance scenario
+scripts/agent/       codex-run, verify, report.schema.json, brief-template.md
+scripts/             heavy, setup-account, setup-backup-key, restore-drill
+docs/                PRD.md, SPEC.md, DESIGN_SYSTEM.md, UI_UX_DECISIONS.md, PROGRESS.md, RUNBOOK.md, agents/codex.md
+AGENTS.md  CLAUDE.md
+```
+
+### Environments
+
+- **Local**: `wrangler dev` serving the built app with a local D1. All automated tests run here.
+- **Staging**: auto-deployed from `main` by GitHub Actions. You hold a staging account key and use it for tests.
+- **Production**: deployed only by you, by hand, after owner approval at a gate. From its first deploy every IndexedDB schema change ships with an upgrade function and a fixture test, because the owner's real data is on it.
+
+## Data model
+
+Every synced record has `id` (UUIDv7, generated on the client), `rev` (server sequence number at its last write), `created_at`, `updated_at`, `deleted_at` (all epoch milliseconds, UTC). Deletion is always a tombstone; the data stays in the record so it can be restored.
+
+| Entity          | Fields beyond the common ones                                                                                                                                                                                                                      | Notes                                                                                                                                                                                                                                                                                                                                                                               |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `activity_type` | `name`, `color` (one of the ten blaze keys in DESIGN_SYSTEM.md), `sort_key` (number), `counts_as_work` (bool), `remind` (bool), `archived_at`                                                                                                      | Four defaults are seeded with fixed ids so two offline devices cannot seed duplicates, in this order: Work (`lake`, counts as work), Overhead (`slate`, does not count; for meetings and other work-related time outside counted hours), Volunteer (`saffron`), Personal (`fern`). New work items default to Work. Reporting reads `counts_as_work` through the id, never the name. |
+| `project`       | `name`, `archived_at`                                                                                                                                                                                                                              | The PRD's optional "category or project grouping", one level.                                                                                                                                                                                                                                                                                                                       |
+| `work_item`     | `name`, `description`, `type_id`, `project_id?`, `place_id?`, `pinned_at?`, `pin_sort`, `archived_at`                                                                                                                                              | Changing `type_id` never touches existing sessions.                                                                                                                                                                                                                                                                                                                                 |
+| `session`       | `work_item_id?`, `type_id`, `start_at`, `end_at?`, `start_tz`, `end_tz?` (IANA zone of the device at capture), `note`, `source` (`live`/`manual`), `place_id?`, `place_state`, `place_candidates[]`, `origin_device_id`, `flags` (`clock_suspect`) | `end_at = null` means running. `work_item_id = null` means untitled. `type_id` is copied from the work item at creation and is then independent.                                                                                                                                                                                                                                    |
+| `place`         | `name`, `lat`, `lng`, `radius_m` (default 100, range 25–2000), `description`, `archived_at`                                                                                                                                                        | Coordinates of named places always sync.                                                                                                                                                                                                                                                                                                                                            |
+| `session_fix`   | `session_id`, `kind` (`start`/`end`), `lat`, `lng`, `accuracy_m`, `captured_at`; id is `<session_id>:<kind>`                                                                                                                                       | Raw GPS. Stays in a local-only store unless the `sync_raw_gps` setting is on.                                                                                                                                                                                                                                                                                                       |
+| `review_mark`   | `day`, `issue_key`, `state` (`reviewed`/`dismissed`); id is `<day>                                                                                                                                                                                 | <issue_key>`                                                                                                                                                                                                                                                                                                                                                                        | Deterministic id, so two devices marking the same issue converge. |
+| `day_review`    | `finished_at`; id is the day `YYYY-MM-DD`                                                                                                                                                                                                          |                                                                                                                                                                                                                                                                                                                                                                                     |
+| `setting`       | `value` (JSON); id is the key                                                                                                                                                                                                                      | Synced keys: `reporting_tz`, `week_start`, `reminder {enabled, threshold_min=240, repeat_min}`, `sync_raw_gps=false`, `long_gap_min=60`, `long_session_min=600`, `note_prompt` (`work`/`all`/`none`), `duration_format`.                                                                                                                                                            |
+| `report_preset` | `name`, `config` (JSON; see Statistics, reports, exports)                                                                                                                                                                                          |                                                                                                                                                                                                                                                                                                                                                                                     |
+| `conflict`      | `entity`, `record_id`, `field`, `kept_value`, `other_value`, `kept_device`, `other_device`, `at`, `resolved_at`                                                                                                                                    | Written by the server during merge, synced down, resolved by the client.                                                                                                                                                                                                                                                                                                            |
+
+Deleting is allowed only for sessions and for types, projects, work items and places that nothing references; otherwise the UI offers Archive. Merging two places reassigns sessions to the target, then archives the source.
+
+**Client stores (Dexie)**: one store per entity above, plus `outbox` (pending mutation batches), `local_fix` (raw GPS when not synced) and `local` (device id and name, theme, sync cursor, clock offset, last backup time, push state, location capture on/off for this device).
+
+**D1 tables**: a single generic `records(entity, id, rev, updated_at, deleted_at, data TEXT)` with primary key `(entity, id)` and an index on `rev`; `data` is the record as UTF-8 JSON, validated per entity with the shared zod schemas. One table means one sync code path and no server migration when a client field is added. Server-only tables: `sync_batches(seq PRIMARY KEY, batch_id UNIQUE, device_id, received_at)`, `devices`, `link_codes`, `push_subscriptions`, `reminder_state`, `meta`.
+
+## Time rules
+
+- Timestamps are UTC epoch milliseconds. Durations are always `end_at − start_at`; a running session's elapsed time is `now − start_at`, recomputed on every tick and on `visibilitychange`/`pageshow`. No counter is ever accumulated.
+- Calendar days are computed in one synced **reporting time zone** (`reporting_tz`, set from the device on first run). Every instant belongs to exactly one day, so a day's totals cannot double-count. `core/time` exposes `dayOf(instant, tz)`, `dayBounds(day, tz)` (23 or 25 hours on DST days), `splitByDay(session, tz)`.
+- A session crossing midnight appears on both days as slices. Minutes are allocated so that slices sum exactly to the session and rows sum exactly to totals: session minutes are `round(ms / 60000)`; earlier slices are floored and the last slice takes the remainder. Reports and exports use these allocated minutes everywhere. Cover this with property tests.
+- When the device's zone differs from `reporting_tz`, show a quiet banner in History and Reports ("Days are shown in America/New_York. Switch to Asia/Tokyo?"). Switching re-buckets everything deterministically. Each session also keeps the zone it was captured in.
+- Manual entry uses native `datetime-local` inputs at minute precision, interpreted in `reporting_tz`. Nonexistent local times (spring forward) are rejected with a message; ambiguous ones (fall back) take the earlier instant and say so.
+- Device clock: each sync response carries server time; the client stores the offset. If it exceeds 2 minutes, Home shows a caution and sessions started or stopped meanwhile get `flags.clock_suspect`. While the app is open, compare `performance.now()` and `Date.now()` deltas; a jump over 2 minutes during a running session sets the same flag. Never auto-correct recorded times.
+
+## Local writes and sync
+
+### Local write path
+
+Every change is one Dexie read-write transaction that updates the entity stores **and** appends the mutation to `outbox`. The UI reads only from Dexie. Start, Stop and Switch are single transactions:
+
+- **Start** checks inside the transaction that no session is running, creates the session with `start_at = now`, and returns. GPS capture and sync are fired afterwards and can never delay or fail the start.
+- **Stop** patches `end_at` from `null` to `now`.
+- **Switch** ends the running session and creates the next with the same `now`, so there is no gap or overlap.
+- Buttons are disabled until the transaction settles, and the in-transaction checks make a double tap harmless.
+
+Undo is an inverse mutation offered in a toast for start, stop, switch, delete, split and merge. Deleted sessions stay restorable under Settings.
+
+### Mutations
+
+```
+batch    = { batch_id, device_id, mode?: "restore", mutations[≤50] }
+mutation = { id, entity, record_id, kind: "put" | "patch" | "delete" | "undelete",
+             value?,                     // put: the whole record
+             fields?: { name: { from, to } },   // patch: before and after image per field
+             at }                        // client edit time, ms
+```
+
+`core/applyMutation(current, mutation, ctx) → { next, conflicts[] }` is the single merge function, used by the server (authoritative) and by the client (optimistic apply and rebase). Rules:
+
+1. **patch**, per field: if the stored value equals `from`, set `to`. If it already equals `to`, do nothing. Otherwise two devices changed the same field: the edit with the later `at` wins (compare `mutation.at` with the record's `updated_at`), and the losing value is written to a `conflict` record. Nothing is dropped silently.
+2. **delete** sets `deleted_at`. A **patch** arriving for a deleted record is applied and undeletes it, with a conflict record noting the restoration.
+3. **put** on an existing id is treated as a patch of the differing fields, except in a `mode: "restore"` batch, where it overwrites.
+4. The server clamps `at` to at most five minutes ahead of its own clock.
+
+### Server
+
+`POST /api/sync/push`: read `max(seq)` and whether `batch_id` was already applied (if so, return the stored acknowledgement); read the affected records in one query; compute in JS with `applyMutation`; write everything in one `db.batch()` whose first statement inserts `sync_batches(seq = max + 1, batch_id, …)`. A concurrent push makes that insert violate the primary key, the whole batch rolls back, and the handler retries from the read (up to three times). The primary key gives serial ordering; the unique `batch_id` gives idempotency. Keep each request to at most four D1 calls (the free plan allows 50 subrequests and 10 ms CPU).
+
+`GET /api/sync/pull?since=<seq>&limit=500` returns records with `rev > since` in order, including tombstones and conflicts, with `more` and `next_since`.
+
+### Client engine
+
+- Triggers: one second after a local write, on `online`, when the app becomes visible, at launch, every 60 seconds while visible, and "Sync now". iOS has no Background Sync, so there is no background trigger.
+- Order: push outbox batches oldest first (the `batch_id` is persisted before sending, so a retry is the same batch), then pull until `more` is false. Back off exponentially to five minutes on failure.
+- Applying a pulled record: if the outbox holds no mutation for it, replace the local copy; otherwise replay the pending mutations over the pulled copy.
+- A 401 puts the app in "signed out" state: recording continues locally and a banner asks to sign in again.
+- An empty local database with a valid device session triggers a full pull. That is the lost-or-replaced-device recovery path.
+
+### What the user sees
+
+| State      | Label                        | When                              |
+| ---------- | ---------------------------- | --------------------------------- |
+| local only | "On this device only"        | Never signed in                   |
+| synced     | "Backed up"                  | Outbox empty, last pull succeeded |
+| pending    | "3 changes waiting"          | Outbox not empty                  |
+| offline    | "Offline. 3 changes waiting" | No connection                     |
+| error      | "Sync problem"               | Opens details and a retry         |
+
+Rows with unsent changes carry a small hollow dot, which is how "saved locally" stays distinct from "backed up".
+
+### Cross-device cases
+
+- Two running sessions after a sync (both devices started offline): keep both; Home shows "Two sessions are running" with one-tap resolutions (stop the earlier one when the later began; stop one now; keep both).
+- Both devices stop the same session: rule 1 applies to `end_at`; the conflict appears in Daily review with "Use 7:00 AM instead".
+
+## Authentication and security
+
+- `scripts/setup-account --env <staging|production>` generates the account key (160 random bits, shown once as `HT1-XXXXX-…` in Crockford base32), stores its SHA-256 as the Worker secret `ACCOUNT_KEY_HASH`, and generates the VAPID key pair. A high-entropy key needs no slow hash, which is what makes this fit in 10 ms CPU. **You run it for staging. The owner runs it for production in their own terminal, so the production key never enters an agent transcript.**
+- `POST /api/auth/enroll {account_key, device_name}`: constant-time compare of the hash; creates a `devices` row and sets the cookie `__Host-ht = <device_id>.<256-bit token>` (HttpOnly, Secure, SameSite=Strict, Path=/, Max-Age 400 days, re-issued when older than 30 days). Only the token's SHA-256 is stored.
+- Device linking: `POST /api/auth/link/start` (signed in) returns a one-time code valid five minutes, shown as a QR code and a link; `POST /api/auth/link/finish {code, device_name}` enrols the new device.
+- `GET /api/auth/devices`, `DELETE /api/auth/devices/:id`, `POST /api/auth/signout`. Settings lists devices with last-seen time and a Revoke action.
+- Failed enrol and link attempts are counted in D1: five failures lock both endpoints for 15 minutes, doubling up to 24 hours. A global lock is acceptable for a single-user app.
+- Every other `/api/*` route requires a valid, unrevoked device session. State-changing requests must also carry the app's own `Origin` and `Content-Type: application/json`.
+- Headers on every response: a strict CSP (`default-src 'self'`, no inline script, `connect-src 'self'`, `frame-ancestors 'none'`), HSTS, `Referrer-Policy: no-referrer`, `X-Content-Type-Options: nosniff`. `/api/*` responses are `Cache-Control: no-store` and the service worker never caches them.
+- No third-party requests of any kind: fonts and icons are bundled, there are no map tiles, analytics or CDNs. A place shows its name, coordinates and accuracy; "Open in Maps" is a link the user taps.
+- `POST /api/account/erase` (signed in, account key re-entered) deletes all cloud records; the app offers to wipe the device as well. Export is the backup file (see Backup, restore, recovery).
+- Secrets live only in Wrangler secrets and GitHub Actions secrets. Nothing secret goes in the repo or the frontend bundle. Codex runs get a scrubbed environment (docs/agents/codex.md).
+
+## Places, reminders, review
+
+### Place capture and recognition
+
+Capture happens only on Start and Stop, in the foreground, after the session is already saved: `watchPosition` with high accuracy for up to 20 seconds, taking the first fix with accuracy ≤ 50 m or the best one at timeout, then patching the session through the normal mutation path. If the app closes first, `place_state` stays `pending`; on next launch a `pending` older than two minutes becomes `unresolved` without coordinates. The current position is never assigned to a manual or past session.
+
+With `d` the distance from the fix to a place's centre and `a` the fix's reported accuracy:
+
+- A fix with `a > 150 m` is not matched: `unresolved`, reason "low accuracy".
+- A place is **possible** if `d ≤ radius + a`, and **sure** if `d ≤ radius` and `a ≤ max(radius, 50)`.
+- Exactly one possible place and it is sure: assign it (`set`).
+- Exactly one possible place, not sure: `suggested`; show "Near 第1寺院?" with one-tap confirm.
+- Two or more possible: `ambiguous`; offer the candidates nearest first.
+- None: `unresolved`; a non-blocking prompt offers Name this place, Choose a place, Leave unnamed (`dismissed`, no review issue) or Later (stays in Daily review).
+
+Wording never claims more than the data supports: "Near 第1寺院 (±35 m)". Privacy controls: capture on/off per device, remove coordinates from a session, `sync_raw_gps`, and "Delete raw coordinates from the cloud" when that toggle is turned off. With raw sync off, an unrecognised place can only be named on the device that captured it; say so in the Settings text.
+
+### Reminders
+
+The cron handler, every five minutes, reads running sessions, the reminder setting and the types in one query; for each session past `threshold_min` whose type has `remind` and which is due according to `reminder_state` (once, or every `repeat_min`), it sends a Web Push to every subscription and records the send. A 404 or 410 from the push service removes that subscription.
+
+- Payload: Declarative Web Push JSON (`"web_push": 8030` as an integer, plus `notification` with `title`, `body`, `navigate`), encrypted `aes128gcm` with VAPID. Browsers without declarative support fall back to the service worker's `push` handler, which shows the same notification. Use a WebCrypto-based library that runs on Workers (`web-push-neo`, `@pushforge/builder` or `@block65/webcrypto-web-push`; verify which is maintained) or about a hundred lines of WebCrypto.
+- Tapping opens `/?check=<session_id>`: a "Still working?" sheet with Keep running, Stop now, and Stop at an earlier time. A reminder never ends a session.
+- Whenever the app opens with a session running past the threshold, the same sheet appears once. That is the fallback when push is unavailable.
+- Permission is requested only from a button in Settings. Limits to state in the UI: iPhone push works only for the Home Screen app, the session must have synced for the server to know about it, and delivery is best effort.
+
+### Daily review
+
+`core/review(day, data) → issues[]`, each with a deterministic `issue_key`:
+
+| Key                   | Condition                                                                    | Wording is neutral, for example         |
+| --------------------- | ---------------------------------------------------------------------------- | --------------------------------------- |
+| `running-long:<id>`   | Running longer than `long_session_min`                                       | "Running for 11h 20m"                   |
+| `two-running`         | More than one running session                                                |                                         |
+| `untitled:<id>`       | No work item                                                                 | "Untitled session, 9:00–10:15 AM"       |
+| `no-note:<id>`        | No note, session ≥ 15 min, type covered by `note_prompt`                     | "No note"                               |
+| `place:<id>`          | `place_state` is `unresolved`, `ambiguous` or `suggested`                    | "Place not recognised"                  |
+| `overlap:<idA>:<idB>` | Two sessions overlap                                                         | "Overlaps Building Maintenance by 20m"  |
+| `suspect-time:<id>`   | Longer than 16 h, starts in the future, `clock_suspect`, or end before start |                                         |
+| `gap:<day>:<start>`   | Gap of at least `long_gap_min` between the day's first and last session      | "1h 30m not recorded, 11:30 AM–1:00 PM" |
+| `conflict:<id>`       | Unresolved sync conflict                                                     | "End time was set on two devices"       |
+
+Each issue offers the fix in place plus Mark reviewed and Dismiss (stored as `review_mark`). "Finish review" stores a `day_review` whether or not issues remain. Home shows one quiet row ("Yesterday: 3 things to check") and never a modal.
+
+### Session tools
+
+- **Split** at a chosen time inside the session: the second half is a new session with the same work item, type and place; the note stays on the first.
+- **Merge** two sessions with the same work item and type: the result spans earliest start to latest end, notes are joined with a line break, and a confirmation shows the resulting span when there is a gap between them.
+- Saving an overlap or a long duration warns but is allowed; end before start is blocked.
+
+## Statistics, reports, exports
+
+Everything is computed in the browser from the local replica by `core/report(config, data)`; no AI and no server work.
+
+- **Statistics**: range (Day, Week, Month, Custom); totals per type; primary work hours (sessions whose type has `counts_as_work`); hours by work item, project and place; session count; a stacked bar per day (per week for ranges over eight weeks); recent activity.
+- **Report config**: `title`, `range`, `type_ids`, `group_by` (`work_item`/`project`/`day`/`type`), `show_sessions`, `show_notes`, `excluded_session_ids`, `headings` (custom labels in any language), `hours_format`. Saved as `report_preset`. System headings default to English.
+- **Printable view**: a print stylesheet for A4 and Letter, repeated table headers, work-hours total stated separately from other types, session notes under each work item when enabled.
+- **CSV**: UTF-8 with BOM, CRLF, RFC 4180 quoting, one row per session: Date, Start, End, Duration (h:mm), Hours (decimal), Type, Counts as work, Project, Work item, Note, Place. Text is exported unmodified.
+- **XLSX**: sheets Summary and Sessions, text in string-typed cells, durations as numbers.
+- A round-trip test exports `库存管理系统开发`, `第1寺院`, `修复洗手台`, emoji and mixed punctuation and compares bytes after re-parsing both formats.
+
+## Backup, restore, recovery
+
+1. **Backup file** (in Milestone 1, because real data lives on the phone from then): Settings → Backup → Download backup writes `hourtrail-backup-YYYY-MM-DD.json` (`format`, `version: 1`, `exported_at`, counts, every entity including tombstones, and local raw fixes flagged as such). On iPhone use `navigator.share({ files })` when available, since downloads inside a standalone app are awkward. The app nudges when the last backup file is over 30 days old.
+2. **Restore** (Milestone 3): pick a file, validate version and schema, show counts and date range, then choose "Add what's missing" (only ids not present) or "Replace everything" (typed confirmation; a backup of the current state is saved first). Restore writes locally and queues `put` mutations in `mode: "restore"` batches, so it works on a clean install before or after sign-in and keeps every relationship because ids are preserved.
+3. **Nightly dump**: a scheduled workflow in the private `hourtrail-backups` repo runs `wrangler d1 export <prod db> --remote`, encrypts with `age -r <recipient>`, commits `dumps/YYYY/hourtrail-YYYY-MM-DD.sql.age`, prunes to 60 dailies plus the first of each month, and always updates `last-run.txt` (scheduled workflows are disabled after 60 days without repo activity). It then calls `POST /api/backup/heartbeat` with a shared secret so Settings can show "Last nightly backup". Its Cloudflare token is scoped to D1 read/export only. A failed run emails the owner through GitHub.
+4. `scripts/setup-backup-key` (owner runs it) creates the `age` key pair, prints the private key once for the password manager and sets the recipient as a repo variable. `scripts/restore-drill` decrypts a dump, loads it into a fresh local D1 and compares record counts per entity.
+5. D1 Time Travel is a third line of defence; verify the free-plan retention and document it in the runbook.
+
+The runbook must cover: restore from a backup file; restore from a nightly dump; replace or lose a phone (sign in with the account key, full pull); lose the account key (rotate with `setup-account`, re-link devices).
+
+## PWA behaviour
+
+- Manifest: name and short name "Hourtrail", `id` and `start_url` `/`, `display: standalone`, icons 192, 512, maskable, and a 180 px apple-touch-icon. `viewport-fit=cover` with safe-area insets.
+- Service worker (`injectManifest`): precache the app shell and the font, fall back to `index.html` for navigations, never touch `/api/*`, handle `push` and `notificationclick`.
+- Updates: `registerType: "prompt"`. A toast offers "Update ready. Reload"; otherwise the update applies on the next cold start. An update never clears IndexedDB. Dexie versions carry upgrade functions, each with a test that upgrades a fixture of the previous version.
+- Ask for `navigator.storage.persist()` after the first recorded session. Storage can still be evicted, which is why sync state, the backup nudge and the full-pull recovery exist.
+- In iPhone Safari outside standalone mode, show an "Add to Home Screen" sheet with the two steps.
+- Degrade without failing: no geolocation hides place capture with a note; no push leaves in-app reminders; no persistence shows a one-line caution in Settings.
+- iPhone specifics to respect: timers freeze in the background (always recompute from timestamps); inputs must be at least 16 px to avoid zoom; use `dvh` units; standalone storage is separate from Safari's; there is no install prompt event.
+
+## Platform limits and trade-offs (checked 2026-11-12)
+
+| Fact                                                                                                                        | Consequence                                                                                                                                                                                    |
+| --------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Workers free: 100,000 requests/day, **10 ms CPU** per request and per cron run, 50 subrequests, 5 Cron Triggers per account | No slow password hashing (hence the account key). Batches capped at 50 mutations. Reports and backup files are built in the browser. Measure CPU at the Milestone 3 gate with `wrangler tail`. |
+| D1 free: 5 M rows read/day, 100,000 rows written/day, 5 GB; queries stop when a daily limit is hit                          | Fine for one user (a few thousand sessions a year). A "Replace everything" restore of a very large history could approach the write limit; the restore UI should upload in resumable batches.  |
+| iOS Web Push works only for Home Screen apps (16.4+); Declarative Web Push from 18.4                                        | Reminders are best effort, with the in-app fallback.                                                                                                                                           |
+| iOS has no Background Sync and suspends timers                                                                              | Sync runs only while the app is open; elapsed time is derived from timestamps.                                                                                                                 |
+| Installed PWAs are bound to their origin                                                                                    | Production origin fixed from Milestone 1.                                                                                                                                                      |
+| Browser storage can be evicted                                                                                              | Persistence request, sync state, backup nudge, full-pull recovery.                                                                                                                             |
+| No map tiles (privacy, cost)                                                                                                | Places are set from the current position or typed coordinates; there is no map picker.                                                                                                         |
+| Conflict resolution is per field with the later edit winning                                                                | Simple and predictable; the losing value is always kept in a conflict record.                                                                                                                  |
+
+If a limit forces a compromise during implementation, record it in `docs/SPEC.md` with the simplest alternative and tell the owner at the next gate.
+
+## Pinned versions and deviations (recorded 2026-11-12)
+
+| Package                                           | Pinned                         | Note                                                                                                                                                                               |
+| ------------------------------------------------- | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Node / pnpm                                       | 26.13 / 12.18                  | Host binaries in `~/.local/bin`.                                                                                                                                                   |
+| TypeScript                                        | 6.0.3                          | 7.0 is out, but SvelteKit, `svelte-check` and `typescript-eslint` (`<6.1`) require 6.x.                                                                                            |
+| Svelte                                            | 5.57.3                         | Runes mode enforced in `svelte.config.js`.                                                                                                                                         |
+| SvelteKit                                         | 2.70.4 (adapter-static 3.0.11) | SvelteKit 3.0 shipped 2026-10-01 and moved configuration into the Vite plugin. 2.x is still maintained, supports Vite 8 and is the version coding agents know. Revisit after v1.0. |
+| Vite / vite-plugin-svelte                         | 8.3.8 / 7.3.1                  |                                                                                                                                                                                    |
+| Vitest                                            | 5.1.0                          | `@cloudflare/vitest-pool-workers` 0.23 still requires Vitest 4.1; decide at task 0.5/3.1 between Vitest 4.1 in `apps/worker` only or plain Vitest against `wrangler dev`.          |
+| Playwright                                        | 1.63.0                         | Matches the browsers already in `~/.cache/ms-playwright` (`chromium-1254`, `webkit-2388`); 1.65 is current.                                                                        |
+| ESLint / typescript-eslint / eslint-plugin-svelte | 10.14 / 8.72.2 / 3.24.1        | Flat config in `eslint.config.js`.                                                                                                                                                 |
+| Prettier / prettier-plugin-svelte                 | 3.10.1 / 4.1.1                 | Tabs, single quotes, width 100.                                                                                                                                                    |
+| Stylelint / config-standard                       | 18.0 / 41.0                    | Token rule in `stylelint.config.js`.                                                                                                                                               |
+
+Exact versions are saved (`save-exact=true`); `pnpm-lock.yaml` is the record.

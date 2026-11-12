@@ -1,0 +1,12 @@
+node_modules
+.svelte-kit
+build
+dist
+coverage
+.wrangler
+.worktrees
+.agent-runs
+pnpm-lock.yaml
+docs/PRD.md
+apps/web/static
+docs/IMPLEMENTATION_PLAN.md

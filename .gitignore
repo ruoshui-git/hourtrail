@@ -1,0 +1,17 @@
+node_modules/
+.svelte-kit/
+build/
+dist/
+coverage/
+.wrangler/
+.dev.vars*
+!.dev.vars.example
+.worktrees/
+.agent-runs/
+test-results/
+playwright-report/
+shots/
+*.log
+.DS_Store
+.env
+.env.*
