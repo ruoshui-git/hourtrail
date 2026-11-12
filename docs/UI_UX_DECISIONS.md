@@ -51,6 +51,7 @@ Work item picker, type, start and end (`datetime-local`), computed duration, not
 
 One line per behaviour change, newest first: `YYYY-MM-DD task-id: what changed and why`.
 
+- 2026-11-12 1.7: History: day header with previous, next and Today; ribbon; totals; trail rows per session slice ("Continued from yesterday", "Continues tomorrow"); gap rows of at least `long_gap_min` between the day's first and last sessions, with Add.
 - 2026-11-12 1.9: Settings > Backup downloads (or shares, on iPhone) a full backup file, shows the last backup date and cautions when none exists or it is over 30 days old; restore comes with cloud sync.
 - 2026-11-12 1.4: Items: search, Pinned, items grouped by project, Archived; item pages edit on blur and list the item's sessions; delete only for items with no sessions.
 - 2026-11-12 1.5: Home: Start, naming, running panel with Stop (Undo, Add note) and Switch, today's totals and ribbon, Pinned and Recent (Recent omits the running item). Ribbon segments are labelled "<item>, <start> to <end or now>".
