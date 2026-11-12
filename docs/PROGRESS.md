@@ -41,11 +41,11 @@ Gate 0 status (2026-11-12): automated part passed. Gallery screenshots in all fo
 | ID  | Task                                                                                      | Who                             | Status                                                                             |
 | --- | ----------------------------------------------------------------------------------------- | ------------------------------- | ---------------------------------------------------------------------------------- |
 | 2.1 | Switch flow polish and the two-running resolver                                           | Luna high                       | done (Luna; review fix: resolution labels with times)                              |
-| 2.2 | `core` split, merge and overlap detection; editor actions                                 | Sol high, then Luna medium      | todo                                                                               |
+| 2.2 | `core` split, merge and overlap detection; editor actions                                 | Sol high, then Luna medium      | active: 2.2a core tools (Sol high)                                                 |
 | 2.3 | `core/review`; Daily review screen; Home's review row                                     | Sol high, then Luna high        | todo                                                                               |
 | 2.4 | Places library: add, edit, radius, merge duplicates, archive                              | Luna medium ∥                   | done (Luna, one finishing round)                                                   |
 | 2.5 | `core` place matching; capture on Start and Stop; unknown-place prompts; privacy controls | Sol high, then Luna high        | active: 2.5a core matching done (Luna); 2.5b capture, prompts, privacy (Luna high) |
-| 2.6 | Search and filters; desktop two-pane History                                              | Luna high                       | active (2.6-search, Luna high)                                                     |
+| 2.6 | Search and filters; desktop two-pane History                                              | Luna high                       | done (Luna, one fix round; review: DST test, plural)                               |
 | 2.7 | Desktop layout pass across all screens                                                    | Luna medium, your visual review | todo                                                                               |
 
 **Gate 2:** scenario E with mocked geolocation (sure, suggested, ambiguous, unresolved, low accuracy, denied, timed out) and on the real phone; review flows; Start never waits on GPS (test with a geolocation call that never returns).
@@ -101,7 +101,9 @@ PRD section 18's failure list maps to tests you must see pass: repeated taps (un
 
 ## Notes
 
-- Polish list for task 4.6: sweep UI text to American English (Colour, metres, recognise, …) and add a unit test that fails on British spellings in .svelte text; session editor's work-item picker shows a search box and a select with the same name (cluttered); Backup page back link is a plain link while other Settings pages use a back button; Home date heading sits flush against the running panel on phones; DataTable period column wraps on phones ("Sep / 14"); a disabled quiet button shows an outline.
+- 2026-11-12: Incident: the 2.1 squash (`git reset --soft main` in a stale worktree) reverted 2.4, 2.5a and the time-zone fixes on main; restored in b2832dc. Prevented by `scripts/agent/squash` (relative to the task base) and a scope guard in `land`.
+
+- Polish list for task 4.6: History results show ISO dates (use locale dates) and preset buttons differ in height from the chips; sweep UI text to American English (Colour, metres, recognise, …) and add a unit test that fails on British spellings in .svelte text; session editor's work-item picker shows a search box and a select with the same name (cluttered); Backup page back link is a plain link while other Settings pages use a back button; Home date heading sits flush against the running panel on phones; DataTable period column wraps on phones ("Sep / 14"); a disabled quiet button shows an outline.
 - Task 3.4 decides pending dots before first sign-in: today every row shows one because nothing has synced; consider hiding them until the device has signed in once.
 - Performance note: `repo.running()` scans all sessions (IndexedDB cannot index null `end_at`); fine for thousands of sessions, revisit with a maintained running-session index if Start ever measures slow.
 
