@@ -78,6 +78,8 @@ export async function seed(db: HourtrailDB, repo: Repo, scenario: SeedScenario):
 		});
 	// Yesterday and earlier today, so Recent and the ribbon have content.
 	await session(coordination.id, VOLUNTEER, 26 * 60, 24 * 60 + 30, 'Planned the 第1寺院 open day.');
+	// Crosses midnight: yesterday 22:00 to today 01:30 (shows on both days).
+	await session(sink.id, VOLUNTEER, 12 * 60 + 30, 9 * 60, '夜间检查 第1寺院.');
 	await session(inventory.id, WORK, 6 * 60 + 28, 4 * 60, '权限开发 and import testing.');
 	await session(maintenance.id, WORK, 3 * 60 + 50, 3 * 60 + 5);
 	await session(sink.id, VOLUNTEER, 2 * 60 + 40, 2 * 60);
