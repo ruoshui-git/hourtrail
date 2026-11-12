@@ -1,6 +1,14 @@
 import { z } from 'zod';
 import { BLAZE_KEYS } from '../blaze';
-import { commonFields, daySchema, ENTITIES, epochSchema, uuidSchema, zoneSchema } from './common';
+import {
+	commonFields,
+	daySchema,
+	ENTITIES,
+	epochSchema,
+	jsonValueSchema,
+	uuidSchema,
+	zoneSchema,
+} from './common';
 import type { Entity } from './common';
 import { settingSchemas } from './settings';
 
@@ -114,13 +122,13 @@ export const dayReviewSchema = z.object({
 export const settingSchema = z.object({
 	...commonFields,
 	id: z.enum(Object.keys(settingSchemas) as (keyof typeof settingSchemas)[]),
-	value: z.json(),
+	value: jsonValueSchema,
 });
 
 export const reportPresetSchema = z.object({
 	...commonFields,
 	name: z.string(),
-	config: z.json(),
+	config: jsonValueSchema,
 });
 
 export const conflictSchema = z.object({
@@ -128,8 +136,8 @@ export const conflictSchema = z.object({
 	entity: z.enum(ENTITIES),
 	record_id: z.string(),
 	field: z.string(),
-	kept_value: z.json(),
-	other_value: z.json(),
+	kept_value: jsonValueSchema,
+	other_value: jsonValueSchema,
 	kept_device: z.string(),
 	other_device: z.string(),
 	at: epochSchema,

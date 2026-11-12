@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { idTimestamp, newId } from '../ids';
-import { ENTITIES, epochSchema, uuidSchema } from '../schema';
+import { ENTITIES, epochSchema, jsonValueSchema, uuidSchema } from '../schema';
 import type { Entity } from '../schema';
 import type { AnyRecord } from './apply';
 import { checkField, equal, managedFields, MutationError, recordValue } from './validation';
@@ -34,8 +34,10 @@ const mutationShape = z
 		entity: z.enum(ENTITIES),
 		record_id: z.string(),
 		kind: z.enum(['put', 'patch', 'delete', 'undelete']),
-		value: z.record(z.string(), z.json()).optional(),
-		fields: z.record(z.string(), z.strictObject({ from: z.json(), to: z.json() })).optional(),
+		value: z.record(z.string(), jsonValueSchema).optional(),
+		fields: z
+			.record(z.string(), z.strictObject({ from: jsonValueSchema, to: jsonValueSchema }))
+			.optional(),
 		at: epochSchema,
 		device_id: z.string(),
 	})
