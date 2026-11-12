@@ -16,7 +16,12 @@ test('the shell and deep links work offline while API requests fail', async ({ p
 	await page.reload();
 	await expect(page.getByRole('heading', { name: 'Today' })).toBeVisible();
 	await page.goto('/history');
-	await expect(page.getByRole('heading', { name: 'History' })).toBeVisible();
+	// History's heading is the day; the frame marks History as the current destination.
+	await expect(page.getByRole('link', { name: 'History' }).first()).toHaveAttribute(
+		'aria-current',
+		'page',
+	);
+	await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
 	const apiFailed = await page.evaluate(async () => {
 		try {
 			await fetch('/api/health');
