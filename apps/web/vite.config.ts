@@ -8,7 +8,34 @@ export default defineConfig({
 	server: { port: portBase, strictPort: true },
 	preview: { port: portBase + 1, strictPort: true },
 	test: {
-		include: ['src/**/*.test.ts'],
-		environment: 'node',
+		projects: [
+			{
+				extends: true,
+				test: {
+					name: 'node',
+					include: ['src/**/*.test.ts'],
+					exclude: [
+						'src/**/*.svelte.test.ts',
+						'src/lib/components/**/*.test.ts',
+						'src/lib/theme.test.ts',
+					],
+					environment: 'node',
+				},
+			},
+			{
+				extends: true,
+				resolve: { conditions: ['browser'] },
+				test: {
+					name: 'components',
+					include: [
+						'src/**/*.svelte.test.ts',
+						'src/lib/components/**/*.test.ts',
+						'src/lib/theme.test.ts',
+					],
+					environment: 'jsdom',
+					setupFiles: ['./src/vitest-setup.ts'],
+				},
+			},
+		],
 	},
 });
