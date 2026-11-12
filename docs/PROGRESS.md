@@ -32,7 +32,7 @@ Gate 0 status (2026-11-12): automated part passed. Gallery screenshots in all fo
 | 1.7  | History: day navigation, TrailList, GapRow to manual entry, midnight slices                                                                                                    | Luna high ∥                   | done (Luna; review fixes: durations, overflow, gutter)                          |
 | 1.8a | App shell (route group, TabBar/Sidebar, toasts, placeholder destinations), built-in service worker with offline shell, update prompt, install hint, storage persistence helper | Luna high (Sol busy with 1.1) | done (Luna; review fix: typed nav routes)                                       |
 | 1.9  | Backup file download                                                                                                                                                           | Luna medium ∥                 | done (Sol, one clarification)                                                   |
-| 1.10 | E2E for scenarios A, B, C, D and local Unicode; kill-and-reload persistence tests                                                                                              | Luna high                     | active (1.10-acceptance, Luna high)                                             |
+| 1.10 | E2E for scenarios A, B, C, D and local Unicode; kill-and-reload persistence tests                                                                                              | Luna high                     | done (Luna; 54/54 repeated runs)                                                |
 
 **Gate 1:** scenarios A–D pass in Chromium and WebKit; sessions survive reload, tab kill and an app update; owner uses it on the iPhone for real.
 
@@ -82,20 +82,20 @@ Gate 0 status (2026-11-12): automated part passed. Gallery screenshots in all fo
 
 Commands (define them in the root `package.json`): `pnpm check` (format, lint, types, unit tests), `pnpm build`, `pnpm e2e` (Playwright, Chromium and WebKit iPhone profile, against `wrangler dev` with a fresh local D1), `pnpm shots` (fixed screenshot set: every route at 390×844 and 1280×800, light and dark, with Chinese seed data). CI runs `check`, `build` and `e2e` on every push and deploys `main` to staging.
 
-| Scenario            | Automated proof                                                                                                                      | Owner check on device | Status |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | --------------------- | ------ |
-| A Quick start       | E2E: tap a recent item, session exists with no form                                                                                  | Gate 1                | todo   |
-| B Resume            | E2E with a mocked clock: two sessions, one work item                                                                                 | Gate 1                | todo   |
-| C Details later     | E2E: different notes on two sessions, item unchanged                                                                                 |                       | todo   |
-| D Historical entry  | E2E: two sessions yesterday appear in History and totals                                                                             |                       | todo   |
-| E Place recognition | Unit tests for matching; E2E with mocked geolocation                                                                                 | Gate 2                | todo   |
-| F Forgotten session | Worker test for the cron decision; E2E for the sheet and corrected totals                                                            | Gate 4, real push     | todo   |
-| G Offline           | E2E: offline start and stop, reload, go online, record on server                                                                     | Gate 3, airplane mode | todo   |
-| H Desktop edit      | Two-context E2E: edit on one, appears on the other, no duplicate                                                                     | Gate 3                | todo   |
-| I Unicode           | Two-context E2E plus the export round-trip test                                                                                      | Gate 4                | todo   |
-| J Monthly report    | Unit tests on `core/report`; E2E for the print view                                                                                  | Gate 4                | todo   |
-| K Custom types      | E2E: create, rename, reorder; totals follow `counts_as_work`; Overhead sessions stay out of work hours even when the type is renamed |                       | todo   |
-| L Recovery          | E2E: backup, clean profile, restore, deep-compare; `restore-drill`                                                                   | Gate 3                | todo   |
+| Scenario            | Automated proof                                                                                                                      | Owner check on device | Status                             |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | --------------------- | ---------------------------------- |
+| A Quick start       | E2E: tap a recent item, session exists with no form                                                                                  | Gate 1                | automated (e2e/scenario-a.spec.ts) |
+| B Resume            | E2E with a mocked clock: two sessions, one work item                                                                                 | Gate 1                | automated (e2e/scenario-b.spec.ts) |
+| C Details later     | E2E: different notes on two sessions, item unchanged                                                                                 |                       | automated (e2e/scenario-c.spec.ts) |
+| D Historical entry  | E2E: two sessions yesterday appear in History and totals                                                                             |                       | automated (e2e/scenario-d.spec.ts) |
+| E Place recognition | Unit tests for matching; E2E with mocked geolocation                                                                                 | Gate 2                | todo                               |
+| F Forgotten session | Worker test for the cron decision; E2E for the sheet and corrected totals                                                            | Gate 4, real push     | todo                               |
+| G Offline           | E2E: offline start and stop, reload, go online, record on server                                                                     | Gate 3, airplane mode | todo                               |
+| H Desktop edit      | Two-context E2E: edit on one, appears on the other, no duplicate                                                                     | Gate 3                | todo                               |
+| I Unicode           | Two-context E2E plus the export round-trip test                                                                                      | Gate 4                | todo                               |
+| J Monthly report    | Unit tests on `core/report`; E2E for the print view                                                                                  | Gate 4                | todo                               |
+| K Custom types      | E2E: create, rename, reorder; totals follow `counts_as_work`; Overhead sessions stay out of work hours even when the type is renamed |                       | todo                               |
+| L Recovery          | E2E: backup, clean profile, restore, deep-compare; `restore-drill`                                                                   | Gate 3                | todo                               |
 
 PRD section 18's failure list maps to tests you must see pass: repeated taps (unit, on the transactions), duplicate requests (Worker), app killed mid-session (E2E reload), GPS unavailable or late (E2E), DST and zone change (unit), clock change (unit on the flag), overlapping entries (unit and E2E), update with existing data (Dexie upgrade test), restore (E2E).
 
