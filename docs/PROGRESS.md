@@ -21,18 +21,18 @@ Gate 0 status (2026-11-12): automated part passed. Gallery screenshots in all fo
 
 ## Milestone 1: core recording (local only)
 
-| ID   | Task                                                                                                                                                                           | Who                           | Status                                                    |
-| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------- | --------------------------------------------------------- |
-| 1.1  | `core`: schemas, ids, `time` with DST, overnight and minute-allocation property tests                                                                                          | Sol high                      | done (Sol, 5% of the window; review fix: required fields) |
-| 1.2  | `core/applyMutation`; Dexie stores, repository layer and outbox; Start, Stop and Switch transactions; undo; Dexie upgrade test harness (moved from 1.8)                        | Sol high                      | done (1.2a and 1.2b on Sol)                               |
-| 1.3  | Activity types settings                                                                                                                                                        | Luna medium ∥                 | done (Luna; one clarification; review fix: chevrons)      |
-| 1.4  | Work items and projects: list, search, edit, pin, archive                                                                                                                      | Luna medium ∥                 | active (1.4-items, finishing E2E and screenshots)         |
-| 1.5  | Home: bare Start, start from a row, running panel, naming, DayRibbon, today's totals                                                                                           | Luna high                     | active (1.5-home, Luna high)                              |
-| 1.6  | Session editor, manual entry, delete with undo, validation and warnings                                                                                                        | Luna high                     | active (1.6-session-editor, Luna high)                    |
-| 1.7  | History: day navigation, TrailList, GapRow to manual entry, midnight slices                                                                                                    | Luna high ∥                   | todo                                                      |
-| 1.8a | App shell (route group, TabBar/Sidebar, toasts, placeholder destinations), built-in service worker with offline shell, update prompt, install hint, storage persistence helper | Luna high (Sol busy with 1.1) | done (Luna; review fix: typed nav routes)                 |
-| 1.9  | Backup file download                                                                                                                                                           | Luna medium ∥                 | todo                                                      |
-| 1.10 | E2E for scenarios A, B, C, D and local Unicode; kill-and-reload persistence tests                                                                                              | Luna high                     | todo                                                      |
+| ID   | Task                                                                                                                                                                           | Who                           | Status                                                                          |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------- | ------------------------------------------------------------------------------- |
+| 1.1  | `core`: schemas, ids, `time` with DST, overnight and minute-allocation property tests                                                                                          | Sol high                      | done (Sol, 5% of the window; review fix: required fields)                       |
+| 1.2  | `core/applyMutation`; Dexie stores, repository layer and outbox; Start, Stop and Switch transactions; undo; Dexie upgrade test harness (moved from 1.8)                        | Sol high                      | done (1.2a and 1.2b on Sol)                                                     |
+| 1.3  | Activity types settings                                                                                                                                                        | Luna medium ∥                 | done (Luna; one clarification; review fix: chevrons)                            |
+| 1.4  | Work items and projects: list, search, edit, pin, archive                                                                                                                      | Luna medium ∥                 | active (1.4-items, finishing E2E and screenshots)                               |
+| 1.5  | Home: bare Start, start from a row, running panel, naming, DayRibbon, today's totals                                                                                           | Luna high                     | done (Luna; review fixes: first-run write in live query, Recent, ribbon labels) |
+| 1.6  | Session editor, manual entry, delete with undo, validation and warnings                                                                                                        | Luna high                     | active (1.6-session-editor, Luna high)                                          |
+| 1.7  | History: day navigation, TrailList, GapRow to manual entry, midnight slices                                                                                                    | Luna high ∥                   | todo                                                                            |
+| 1.8a | App shell (route group, TabBar/Sidebar, toasts, placeholder destinations), built-in service worker with offline shell, update prompt, install hint, storage persistence helper | Luna high (Sol busy with 1.1) | done (Luna; review fix: typed nav routes)                                       |
+| 1.9  | Backup file download                                                                                                                                                           | Luna medium ∥                 | todo                                                                            |
+| 1.10 | E2E for scenarios A, B, C, D and local Unicode; kill-and-reload persistence tests                                                                                              | Luna high                     | todo                                                                            |
 
 **Gate 1:** scenarios A–D pass in Chromium and WebKit; sessions survive reload, tab kill and an app update; owner uses it on the iPhone for real.
 
@@ -101,7 +101,8 @@ PRD section 18's failure list maps to tests you must see pass: repeated taps (un
 
 ## Notes
 
-- Polish list for task 4.6: DataTable period column wraps on phones ("Sep / 14"); a disabled quiet button shows an outline.
+- Polish list for task 4.6: Home date heading sits flush against the running panel on phones; DataTable period column wraps on phones ("Sep / 14"); a disabled quiet button shows an outline.
+- Task 2.1 should consolidate Home's duplicated state (`runningSnapshot`, `refreshedItems`, `refreshedSessions`) into the live queries.
 - Performance note: `repo.running()` scans all sessions (IndexedDB cannot index null `end_at`); fine for thousands of sessions, revisit with a maintained running-session index if Start ever measures slow.
 
 - 2026-11-12: Repository bootstrapped. Codex 5-hour window was 38% used at the start (shared with the temple_inventory orchestrator).
