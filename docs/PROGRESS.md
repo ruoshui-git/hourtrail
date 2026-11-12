@@ -10,27 +10,27 @@ Status values: `todo`, `active` (with the run name), `review`, `done` (with the 
 | 0.2  | `scripts/agent/*` and the smoke run                                                                                                                                       | You                                                                  | done                                                                                                                                                    |
 | 0.3  | `tokens.css`, base styles, font, the contrast test                                                                                                                        | You (copy the values from DESIGN_SYSTEM.md exactly)                  | done                                                                                                                                                    |
 | 0.4a | Screenshot tooling (`pnpm shots`), gallery shell, Blaze, TypeTag, Button, IconButton, Timer, fields and choice controls                                                   | Sol high. Load `frontend-design` for your review (DESIGN_SYSTEM.md). | done (63da7e6; one review fix: Field row stretching)                                                                                                    |
-| 0.4b | Overlays and notices: Sheet, ConfirmDialog, Menu, Toast, Banner, EmptyState                                                                                               | Luna high (Sol if the window allows)                                 | todo                                                                                                                                                    |
-| 0.4c | Domain components: RunningPanel, DayRibbon, TrailList, GapRow, WorkItemRow, SyncBadge, TabBar, Sidebar, ReviewItem, StatTile, BarChart, HBarList, DataTable ∥             | Luna high                                                            | todo                                                                                                                                                    |
-| 0.4d | Statistics components: StatTile, BarChart, HBarList, DataTable ∥                                                                                                          | Luna high                                                            | todo                                                                                                                                                    |
+| 0.4b | Overlays and notices: Sheet, ConfirmDialog, Menu, Toast, Banner, EmptyState                                                                                               | Luna high (Sol if the window allows)                                 | active (0.4b-overlays, Haiku: Codex window exhausted)                                                                                                   |
+| 0.4c | Domain components: RunningPanel, DayRibbon, TrailList, GapRow, WorkItemRow, SyncBadge, TabBar, Sidebar, ReviewItem, StatTile, BarChart, HBarList, DataTable ∥             | Luna high                                                            | active (0.4c-domain, Haiku: Codex window exhausted)                                                                                                     |
+| 0.4d | Statistics components: StatTile, BarChart, HBarList, DataTable ∥                                                                                                          | Luna high                                                            | active (0.4d-charts, Haiku: Codex window exhausted)                                                                                                     |
 | 0.5  | Worker serving the built shell, manifest, icons; deploy to staging **and production**                                                                                     | You, after the owner runs `pnpm exec wrangler login`                 | review: Worker, headers, manifest, icons and shell E2E done locally; deploy waits for `wrangler login`, WebKit system libraries and GitHub token access |
 
 **Gate 0 (owner):** approve gallery screenshots (phone and desktop, light and dark, Chinese sample content), and install the production shell on the iPhone to confirm it opens standalone with correct safe areas.
 
 ## Milestone 1: core recording (local only)
 
-| ID   | Task                                                                                                        | Who           | Status |
-| ---- | ----------------------------------------------------------------------------------------------------------- | ------------- | ------ |
-| 1.1  | `core`: schemas, ids, `time` with DST, overnight and minute-allocation property tests                       | Sol high      | todo   |
-| 1.2  | `core/applyMutation`; Dexie stores, repository layer and outbox; Start, Stop and Switch transactions; undo  | Sol high      | todo   |
-| 1.3  | Activity types settings                                                                                     | Luna medium ∥ | todo   |
-| 1.4  | Work items and projects: list, search, edit, pin, archive                                                   | Luna medium ∥ | todo   |
-| 1.5  | Home: bare Start, start from a row, running panel, naming, DayRibbon, today's totals                        | Luna high     | todo   |
-| 1.6  | Session editor, manual entry, delete with undo, validation and warnings                                     | Luna high     | todo   |
-| 1.7  | History: day navigation, TrailList, GapRow to manual entry, midnight slices                                 | Luna high ∥   | todo   |
-| 1.8  | Service worker, offline shell, update prompt, install hint, storage persistence, Dexie upgrade test harness | Sol high      | todo   |
-| 1.9  | Backup file download                                                                                        | Luna medium ∥ | todo   |
-| 1.10 | E2E for scenarios A, B, C, D and local Unicode; kill-and-reload persistence tests                           | Luna high     | todo   |
+| ID   | Task                                                                                                        | Who           | Status                        |
+| ---- | ----------------------------------------------------------------------------------------------------------- | ------------- | ----------------------------- |
+| 1.1  | `core`: schemas, ids, `time` with DST, overnight and minute-allocation property tests                       | Sol high      | next (Sol at the 14:35 reset) |
+| 1.2  | `core/applyMutation`; Dexie stores, repository layer and outbox; Start, Stop and Switch transactions; undo  | Sol high      | todo                          |
+| 1.3  | Activity types settings                                                                                     | Luna medium ∥ | todo                          |
+| 1.4  | Work items and projects: list, search, edit, pin, archive                                                   | Luna medium ∥ | todo                          |
+| 1.5  | Home: bare Start, start from a row, running panel, naming, DayRibbon, today's totals                        | Luna high     | todo                          |
+| 1.6  | Session editor, manual entry, delete with undo, validation and warnings                                     | Luna high     | todo                          |
+| 1.7  | History: day navigation, TrailList, GapRow to manual entry, midnight slices                                 | Luna high ∥   | todo                          |
+| 1.8  | Service worker, offline shell, update prompt, install hint, storage persistence, Dexie upgrade test harness | Sol high      | todo                          |
+| 1.9  | Backup file download                                                                                        | Luna medium ∥ | todo                          |
+| 1.10 | E2E for scenarios A, B, C, D and local Unicode; kill-and-reload persistence tests                           | Luna high     | todo                          |
 
 **Gate 1:** scenarios A–D pass in Chromium and WebKit; sessions survive reload, tab kill and an app update; owner uses it on the iPhone for real.
 

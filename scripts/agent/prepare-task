@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+# Prepare a task worktree and run directory without launching Codex, for the
+# Haiku fallback (docs/agents/codex.md). Prints the worktree, run dir and port.
+# Usage: prepare-task NAME BRIEF
+
+name=${1:?Usage: prepare-task NAME BRIEF}
+brief=${2:?Usage: prepare-task NAME BRIEF}
+export PATH="$HOME/.local/bin:$PATH"
+here=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+repo=$(dirname -- "$(git -C "$here" rev-parse --path-format=absolute --git-common-dir)")
+wt=$repo/.worktrees/$name
+run=$repo/.agent-runs/$name
+mkdir -p "$run"
+cp -- "$brief" "$run/brief.md"
+cp -- "$brief" "$run/brief.orig.md"
+if [[ ! -d $wt ]]; then
+	git -C "$repo" worktree add -q -b "task/$name" "$wt" main
+fi
+git -C "$wt" rev-parse HEAD >"$run/base"
+(cd "$wt" && pnpm install --frozen-lockfile --prefer-offline --reporter=silent) >"$run/install.log" 2>&1
+if [[ ! -f $run/port ]]; then
+	used=" $(cat "$repo"/.agent-runs/*/port 2>/dev/null | tr '\n' ' ') "
+	slot=1
+	while [[ $used == *" $((5200 + slot * 20)) "* ]]; do slot=$((slot + 1)); done
+	echo $((5200 + slot * 20)) >"$run/port"
+fi
+echo "worktree=$wt run=$run port=$(cat "$run/port")"
