@@ -4,15 +4,34 @@ set -Eeuo pipefail
 # Land a verified task: rebase its committed branch on main, require `pnpm check`
 # to pass, fast-forward main, push, and remove the worktree and branch.
 # Stops (and changes nothing on main) if the rebase or the check fails.
-# Usage: land NAME
+# Also refuses when the task's commits touch files outside the brief's `owned`
+# globs, unless each such path matches an --extra GLOB (orchestrator review fixes).
+# Usage: land NAME [--extra GLOB]...
 
-name=${1:?Usage: land NAME}
+name=${1:?Usage: land NAME [--extra GLOB]...}
+shift
+extra=()
+while [[ $# -gt 0 ]]; do
+	case $1 in
+		--extra) extra+=("${2:?--extra needs a glob}"); shift 2 ;;
+		*) echo "land: unknown option $1" >&2; exit 2 ;;
+	esac
+done
 export PATH="$HOME/.local/bin:$PATH"
 here=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 repo=$(dirname -- "$(git -C "$here" rev-parse --path-format=absolute --git-common-dir)")
 wt=$repo/.worktrees/$name
 [[ -z $(git -C "$wt" status --porcelain) ]] || { echo "land: $name has uncommitted changes" >&2; exit 1; }
 git -C "$wt" rebase -q main
+# Scope guard: every path the task changes must be owned (or explicitly allowed).
+outside=$(node "$repo/scripts/agent/lib/scope.mjs" "$repo/.agent-runs/$name/brief.orig.md" \
+	"$(git -C "$wt" diff --name-only main..HEAD)" "${extra[@]}")
+if [[ -n $outside ]]; then
+	echo "land: $name changes paths outside its owned globs:" >&2
+	echo "$outside" | sed 's/^/  /' >&2
+	echo "land: pass --extra GLOB for intended review fixes, or fix the branch" >&2
+	exit 1
+fi
 (cd "$wt" && pnpm install --frozen-lockfile --prefer-offline --reporter=silent)
 if ! (cd "$wt" && pnpm check >"$repo/.agent-runs/$name/land-check.log" 2>&1); then
 	echo "land: pnpm check failed for $name; see .agent-runs/$name/land-check.log" >&2

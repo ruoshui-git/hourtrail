@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+# Squash a task worktree's changes into one commit relative to the task's own
+# base (its merge base with main), never relative to main's tip: committing a
+# stale worktree's index against a newer main would silently revert everything
+# merged since (this happened once, in task 2.1). Usage: squash NAME MESSAGE_FILE
+
+name=${1:?Usage: squash NAME MESSAGE_FILE}
+message=${2:?Usage: squash NAME MESSAGE_FILE}
+here=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+repo=$(dirname -- "$(git -C "$here" rev-parse --path-format=absolute --git-common-dir)")
+wt=$repo/.worktrees/$name
+git -C "$wt" add -A
+git -C "$wt" diff --cached --quiet || git -C "$wt" commit -q -m "wip: $name"
+base=$(git -C "$wt" merge-base HEAD main)
+git -C "$wt" reset -q --soft "$base"
+git -C "$wt" commit -q -F "$message"
+git -C "$wt" log --oneline -1
