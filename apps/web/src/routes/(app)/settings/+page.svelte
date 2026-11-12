@@ -31,6 +31,14 @@
 			>
 				<span>{section}</span><ChevronRight aria-hidden="true" />
 			</a>
+		{:else if section === 'Backup'}
+			<a
+				class="row"
+				href={resolve('/settings/backup')}
+				aria-current={active === 'backup' ? 'page' : undefined}
+			>
+				<span>{section}</span><ChevronRight aria-hidden="true" />
+			</a>
 		{:else if section === 'Appearance'}
 			<a
 				class="row"
