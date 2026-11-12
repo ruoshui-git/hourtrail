@@ -4,8 +4,14 @@
 	import type { Destination } from '$lib/components/nav';
 	import type { Snippet } from 'svelte';
 	import SessionEditorHost from '$lib/features/session/SessionEditorHost.svelte';
+	import { prepareLocalData } from '$lib/db/app';
 
 	let { children }: { children: Snippet } = $props();
+
+	// Seed default types and the reporting zone once, outside any live query.
+	$effect(() => {
+		void prepareLocalData();
+	});
 	// The first path segment names the destination, so /items/<id> still marks Items.
 	let current = $derived(
 		(page.url.pathname === '/' ? 'home' : page.url.pathname.split('/')[1]) as Destination,
