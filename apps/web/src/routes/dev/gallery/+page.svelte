@@ -62,6 +62,7 @@
 
 	main :global(.stack) {
 		display: grid;
+		align-content: start;
 		gap: var(--ht-space-4);
 		min-width: 0;
 	}
@@ -79,6 +80,7 @@
 
 	main :global(.columns) {
 		display: grid;
+		align-items: start;
 		gap: var(--ht-space-5);
 		min-width: 0;
 	}
