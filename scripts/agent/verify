@@ -42,8 +42,10 @@ step "types" pnpm typecheck
 step "unit tests" unit "$dir"
 here_counts=$(node "$counts" "$dir")
 
-# Baseline: main's counts, cached per commit.
-main_sha=$(git -C "$repo" rev-parse main)
+# Baseline: test counts at the commit this task branched from (its merge base
+# with main), cached per commit, so later merges to main do not look like
+# removed tests.
+main_sha=$(git -C "$dir" merge-base main HEAD 2>/dev/null || git -C "$repo" rev-parse main)
 cache=$repo/.agent-runs/.test-counts/$main_sha
 if [[ ! -f $cache && $dir != "$repo" ]]; then
 	mkdir -p "$(dirname "$cache")"
