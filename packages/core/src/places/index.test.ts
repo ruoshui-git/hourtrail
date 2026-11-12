@@ -56,7 +56,9 @@ describe('distanceM', () => {
 				const ac = distanceM(a, c);
 				const cb = distanceM(c, b);
 				expect(Math.abs(ab - ba)).toBeLessThanOrEqual(1e-6);
-				expect(ab).toBeLessThanOrEqual(ac + cb + 1e-6);
+				// Relative tolerance: near antipodes double-precision haversine is off by a few
+				// centimetres in 20 000 km (seed 492562134 found 6.7 cm), irrelevant for places.
+				expect(ab).toBeLessThanOrEqual(ac + cb + 1e-6 + 1e-8 * (ac + cb));
 			}),
 			{ numRuns: 500 },
 		);
