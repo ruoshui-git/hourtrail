@@ -138,7 +138,7 @@ mutation = { id, entity, record_id, kind: "put" | "patch" | "delete" | "undelete
 
 - Triggers: one second after a local write, on `online`, when the app becomes visible, at launch, every 60 seconds while visible, and "Sync now". iOS has no Background Sync, so there is no background trigger.
 - Order: push outbox batches oldest first (the `batch_id` is persisted before sending, so a retry is the same batch), then pull until `more` is false. Back off exponentially to five minutes on failure.
-- Applying a pulled record: if the outbox holds no mutation for it, replace the local copy; otherwise replay the pending mutations over the pulled copy.
+- Applying a pulled record: if the outbox holds no mutation for it, replace the local copy; otherwise replay the pending mutations over the pulled copy **in outbox order** (core `replay`), never sorted by edit time.
 - A 401 puts the app in "signed out" state: recording continues locally and a banner asks to sign in again.
 - An empty local database with a valid device session triggers a full pull. That is the lost-or-replaced-device recovery path.
 
