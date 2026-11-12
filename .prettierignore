@@ -9,4 +9,3 @@ coverage
 pnpm-lock.yaml
 docs/PRD.md
 apps/web/static
-docs/IMPLEMENTATION_PLAN.md
