@@ -34,8 +34,6 @@ Gate 0 status (2026-11-12): automated part passed. Gallery screenshots in all fo
 | 1.9  | Backup file download                                                                                                                                                           | Luna medium ∥                 | done (Sol, one clarification)                                                   |
 | 1.10 | E2E for scenarios A, B, C, D and local Unicode; kill-and-reload persistence tests                                                                                              | Luna high                     | done (Luna; 54/54 repeated runs)                                                |
 
-Gate 1 status (2026-11-12): automated part passed (scenarios A–D in Chromium and WebKit, reload, closed-tab, update and offline persistence; CI green on fd9c437). Production deployed from fd9c437 under the owner's standing approval. Owner check pending: use it on the iPhone for real.
-
 **Gate 1:** scenarios A–D pass in Chromium and WebKit; sessions survive reload, tab kill and an app update; owner uses it on the iPhone for real.
 
 ## Milestone 2: daily organisation
