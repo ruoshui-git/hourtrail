@@ -15,7 +15,6 @@ export const SHOT_ROUTES: ShotRoute[] = [
 	{ name: 'home-untitled', path: '/', seed: 'untitled' },
 	{ name: 'items', path: '/items', seed: 'idle' },
 	{ name: 'history', path: '/history' },
-	{ name: 'items', path: '/items' },
 	{ name: 'reports', path: '/reports' },
 	{ name: 'settings', path: '/settings' },
 	{ name: 'gallery', path: '/dev/gallery' },
