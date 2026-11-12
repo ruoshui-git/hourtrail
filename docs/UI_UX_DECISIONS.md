@@ -51,6 +51,7 @@ Work item picker, type, start and end (`datetime-local`), computed duration, not
 
 One line per behaviour change, newest first: `YYYY-MM-DD task-id: what changed and why`.
 
+- 2026-11-12 1.3: Settings home lists all sections (unbuilt ones say "Coming soon"); Activity types (add, rename, colour, reorder, counts as work, remind, archive with Undo) and Appearance (System, Light, Dark, stored per device) work.
 - 2026-11-12 1.8a: Added the app frame (tab bar on phones, sidebar from 1024 px), five placeholder destinations, the offline shell, the "Update ready. Reload" toast and the iPhone install hint.
 - 2026-11-12 0.4b: Added sheet, confirm dialog (with typed confirmation), menu, toasts with Undo, banners and empty state to the gallery; overlays open from `?open=<id>` for screenshots.
 - 2026-11-12 0.4d: Added stat tiles, the stacked bar chart, the bar list and the data table to the gallery. Column totals show only where they fit; the tooltip and table always carry every number.

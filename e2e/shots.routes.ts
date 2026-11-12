@@ -11,4 +11,6 @@ export const SHOT_ROUTES: { name: string; path: string }[] = [
 	{ name: 'gallery-confirm-danger', path: '/dev/gallery?open=confirm-danger' },
 	{ name: 'gallery-confirm-typed', path: '/dev/gallery?open=confirm-typed' },
 	{ name: 'gallery-menu', path: '/dev/gallery?open=menu' },
+	{ name: 'settings-types', path: '/settings/types' },
+	{ name: 'settings-appearance', path: '/settings/appearance' },
 ];
