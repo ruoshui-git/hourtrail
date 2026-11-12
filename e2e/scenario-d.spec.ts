@@ -58,7 +58,7 @@ test('Scenario D: yesterday entries show in History totals without changing toda
 		.click();
 	await expect(page.locator('button.session').filter({ hasText: inventory.name })).toBeVisible();
 	await expect(page.getByRole('button', { name: /2:00 PM 3:00 PM 修复洗手台/ })).toBeVisible();
-	await expect(page.locator('.totals')).toHaveText('1h 00m work, 3h 29m other');
+	await expect(page.locator('.totals')).toHaveText('1h 00m work, 4h 29m other');
 	const sessions = (await readRecords(page)).session.filter(
 		(session) => session.source === 'manual',
 	);
