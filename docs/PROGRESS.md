@@ -4,13 +4,13 @@ Status values: `todo`, `active` (with the run name), `review`, `done` (with the 
 
 ## Milestone 0: foundation
 
-| ID  | Task                                                                                                                                                                      | Who                                                                  | Status |
-| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- | ------ |
-| 0.1 | `git init`, workspace scaffold, lint, format, type and test tooling, `scripts/heavy`, the repo documents, private GitHub repo `hourtrail`, CI workflow running the checks | You                                                                  | todo   |
-| 0.2 | `scripts/agent/*` and the smoke run                                                                                                                                       | You                                                                  | todo   |
-| 0.3 | `tokens.css`, base styles, font, the contrast test                                                                                                                        | You (copy the values from DESIGN_SYSTEM.md exactly)                  | todo   |
-| 0.4 | Component primitives and `/dev/gallery`; `pnpm shots`                                                                                                                     | Sol high. Load `frontend-design` for your review (DESIGN_SYSTEM.md). | todo   |
-| 0.5 | Worker serving the built shell, manifest, icons; deploy to staging **and production**                                                                                     | You, after the owner runs `pnpm exec wrangler login`                 | todo   |
+| ID  | Task                                                                                                                                                                      | Who                                                                  | Status                                             |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- | -------------------------------------------------- |
+| 0.1 | `git init`, workspace scaffold, lint, format, type and test tooling, `scripts/heavy`, the repo documents, private GitHub repo `hourtrail`, CI workflow running the checks | You                                                                  | done (GitHub repo and CI pending owner permission) |
+| 0.2 | `scripts/agent/*` and the smoke run                                                                                                                                       | You                                                                  | done                                               |
+| 0.3 | `tokens.css`, base styles, font, the contrast test                                                                                                                        | You (copy the values from DESIGN_SYSTEM.md exactly)                  | done                                               |
+| 0.4 | Component primitives and `/dev/gallery`; `pnpm shots`                                                                                                                     | Sol high. Load `frontend-design` for your review (DESIGN_SYSTEM.md). | todo                                               |
+| 0.5 | Worker serving the built shell, manifest, icons; deploy to staging **and production**                                                                                     | You, after the owner runs `pnpm exec wrangler login`                 | todo                                               |
 
 **Gate 0 (owner):** approve gallery screenshots (phone and desktop, light and dark, Chinese sample content), and install the production shell on the iPhone to confirm it opens standalone with correct safe areas.
 
@@ -97,3 +97,5 @@ PRD section 18's failure list maps to tests you must see pass: repeated taps (un
 ## Notes
 
 - 2026-11-12: Repository bootstrapped. Codex 5-hour window was 38% used at the start (shared with the temple_inventory orchestrator).
+- 2026-11-12: Pinned SvelteKit 2.70.4 and TypeScript 6.0.3 (see SPEC "Pinned versions"). Runner smoke test passed, including resume with structured output.
+- 2026-11-12: All 72 contrast claims in DESIGN_SYSTEM hold for tokens.css; Stylelint enforces tokens-only styles outside `src/lib/styles/`.

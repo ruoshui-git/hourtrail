@@ -1,0 +1,247 @@
+/*
+ * Blaze design tokens. The only file allowed to hold raw colours and lengths
+ * (see docs/DESIGN_SYSTEM.md). Values are copied from DESIGN_SYSTEM exactly;
+ * src/lib/styles/tokens.test.ts checks the contrast claims.
+ *
+ * Dark values are defined twice on purpose: once for the system preference
+ * (unless the user forced light) and once for an explicit dark choice. The
+ * test asserts the two dark blocks are identical.
+ */
+
+@font-face {
+	font-family: 'National Park';
+	font-style: normal;
+	font-weight: 200 800;
+	font-display: swap;
+	src: url('./fonts/national-park-latin-wght.woff2') format('woff2-variations');
+	unicode-range:
+		U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+		U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+:root {
+	color-scheme: light;
+
+	/* Chrome colours */
+	--ht-paper: #f1f4f0;
+	--ht-surface: #fff;
+	--ht-sunken: #e4e9e3;
+	--ht-ink: #17211d;
+	--ht-ink-2: #4c5953;
+	--ht-ink-3: #66726c;
+	--ht-line: #d5dbd5;
+	--ht-line-strong: #7a8780;
+	--ht-danger: #b42318;
+	--ht-caution: #8a5300;
+	--ht-brand: #1e3a31;
+
+	/* Blaze palette: mark paints blazes, segments and bars; text is the rare coloured word. */
+	--ht-blaze-lake: #2563c9;
+	--ht-blaze-lake-text: #1d55b3;
+	--ht-blaze-saffron: #b87400;
+	--ht-blaze-saffron-text: #8a5600;
+	--ht-blaze-fern: #2e8b57;
+	--ht-blaze-fern-text: #1f6e43;
+	--ht-blaze-rowan: #c8402f;
+	--ht-blaze-rowan-text: #ad3122;
+	--ht-blaze-heather: #7a4fbf;
+	--ht-blaze-heather-text: #6a3fb0;
+	--ht-blaze-spruce: #0f7f86;
+	--ht-blaze-spruce-text: #0b6a70;
+	--ht-blaze-rose: #c4477f;
+	--ht-blaze-rose-text: #a93669;
+	--ht-blaze-lichen: #6f7d12;
+	--ht-blaze-lichen-text: #56620b;
+	--ht-blaze-slate: #5b6b82;
+	--ht-blaze-slate-text: #4c5b70;
+	--ht-blaze-bark: #8a5a3c;
+	--ht-blaze-bark-text: #774b30;
+
+	/* Wash: share of the blaze colour mixed into surface. */
+	--ht-wash-mix: 12%;
+
+	/* Overlays */
+	--ht-shadow-overlay: 0 8px 32px rgb(23 33 29 / 18%);
+	--ht-overlay-border: transparent;
+	--ht-scrim: rgb(23 33 29 / 40%);
+
+	/* Faces */
+	--ht-font-display:
+		'National Park', ui-rounded, system-ui, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+	--ht-font-text:
+		system-ui, -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC',
+		sans-serif;
+	--ht-weight-regular: 400;
+	--ht-weight-strong: 600;
+
+	/* Type roles: size / line height */
+	--ht-size-timer: 64px;
+	--ht-size-figure: 36px;
+	--ht-size-title: 28px;
+	--ht-size-heading: 21px;
+	--ht-size-body: 17px;
+	--ht-size-label: 15px;
+	--ht-size-caption: 13px;
+	--ht-type-timer: 600 var(--ht-size-timer) / 1 var(--ht-font-display);
+	--ht-type-figure: 600 var(--ht-size-figure) / 1.1 var(--ht-font-display);
+	--ht-type-title: 600 var(--ht-size-title) / 1.15 var(--ht-font-display);
+	--ht-type-heading: 600 var(--ht-size-heading) / 1.25 var(--ht-font-display);
+	--ht-type-body: 400 var(--ht-size-body) / 1.4 var(--ht-font-text);
+	--ht-type-body-strong: 600 var(--ht-size-body) / 1.4 var(--ht-font-text);
+	--ht-type-label: 400 var(--ht-size-label) / 1.35 var(--ht-font-text);
+	--ht-type-caption: 400 var(--ht-size-caption) / 1.3 var(--ht-font-text);
+
+	/* Timer cells keep digits from jittering */
+	--ht-timer-digit: 0.62em;
+	--ht-timer-colon: 0.3em;
+	--ht-measure: 70ch;
+
+	/* Space */
+	--ht-space-1: 4px;
+	--ht-space-2: 8px;
+	--ht-space-3: 12px;
+	--ht-space-4: 16px;
+	--ht-space-5: 24px;
+	--ht-space-6: 32px;
+	--ht-space-7: 48px;
+	--ht-space-8: 64px;
+	--ht-gutter: 16px;
+
+	/* Shape */
+	--ht-hairline: 1px;
+	--ht-radius-blaze: 2px;
+	--ht-radius-control: 12px;
+	--ht-radius-chip: 999px;
+	--ht-radius-sheet: 20px;
+	--ht-radius-panel: 0;
+	--ht-focus-width: 2px;
+	--ht-focus-offset: 2px;
+
+	/* Sizes */
+	--ht-target: 44px;
+	--ht-control-height: 48px;
+	--ht-button-lg: 60px;
+	--ht-button-md: 48px;
+	--ht-button-sm: 36px;
+	--ht-blaze-sm-w: 4px;
+	--ht-blaze-sm-h: 14px;
+	--ht-blaze-md-w: 6px;
+	--ht-blaze-md-h: 20px;
+	--ht-blaze-lg-w: 8px;
+	--ht-blaze-lg-h: 28px;
+	--ht-ribbon-height: 12px;
+	--ht-now-tick: 2px;
+	--ht-rail-width: 32px;
+	--ht-rail-segment: 4px;
+	--ht-stack-gap: 2px;
+	--ht-sidebar-width: 220px;
+	--ht-dialog-min: 480px;
+	--ht-dialog-max: 560px;
+
+	/* Motion */
+	--ht-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+	--ht-duration-press: 120ms;
+	--ht-duration-sheet: 200ms;
+	--ht-duration-start: 320ms;
+
+	/* Layers */
+	--ht-z-nav: 30;
+	--ht-z-menu: 40;
+	--ht-z-sheet: 50;
+	--ht-z-toast: 60;
+}
+
+@media (prefers-color-scheme: dark) {
+	:root:not([data-theme='light']) {
+		color-scheme: dark;
+
+		--ht-paper: #111614;
+		--ht-surface: #1a211e;
+		--ht-sunken: #0b0f0d;
+		--ht-ink: #e8ede9;
+		--ht-ink-2: #a9b5af;
+		--ht-ink-3: #86938c;
+		--ht-line: #2b3531;
+		--ht-line-strong: #66746d;
+		--ht-danger: #ff8a7a;
+		--ht-caution: #f2b84b;
+		--ht-blaze-lake: #6ca0f5;
+		--ht-blaze-lake-text: #6ca0f5;
+		--ht-blaze-saffron: #f0b43c;
+		--ht-blaze-saffron-text: #f0b43c;
+		--ht-blaze-fern: #5fc08a;
+		--ht-blaze-fern-text: #5fc08a;
+		--ht-blaze-rowan: #f0796a;
+		--ht-blaze-rowan-text: #f0796a;
+		--ht-blaze-heather: #ae8bea;
+		--ht-blaze-heather-text: #ae8bea;
+		--ht-blaze-spruce: #45bac0;
+		--ht-blaze-spruce-text: #45bac0;
+		--ht-blaze-rose: #ee82b0;
+		--ht-blaze-rose-text: #ee82b0;
+		--ht-blaze-lichen: #b4c254;
+		--ht-blaze-lichen-text: #b4c254;
+		--ht-blaze-slate: #9aaac2;
+		--ht-blaze-slate-text: #9aaac2;
+		--ht-blaze-bark: #c99675;
+		--ht-blaze-bark-text: #c99675;
+		--ht-wash-mix: 16%;
+		--ht-shadow-overlay: none;
+		--ht-overlay-border: var(--ht-line);
+		--ht-scrim: rgb(0 0 0 / 55%);
+	}
+}
+
+:root[data-theme='dark'] {
+	color-scheme: dark;
+
+	--ht-paper: #111614;
+	--ht-surface: #1a211e;
+	--ht-sunken: #0b0f0d;
+	--ht-ink: #e8ede9;
+	--ht-ink-2: #a9b5af;
+	--ht-ink-3: #86938c;
+	--ht-line: #2b3531;
+	--ht-line-strong: #66746d;
+	--ht-danger: #ff8a7a;
+	--ht-caution: #f2b84b;
+	--ht-blaze-lake: #6ca0f5;
+	--ht-blaze-lake-text: #6ca0f5;
+	--ht-blaze-saffron: #f0b43c;
+	--ht-blaze-saffron-text: #f0b43c;
+	--ht-blaze-fern: #5fc08a;
+	--ht-blaze-fern-text: #5fc08a;
+	--ht-blaze-rowan: #f0796a;
+	--ht-blaze-rowan-text: #f0796a;
+	--ht-blaze-heather: #ae8bea;
+	--ht-blaze-heather-text: #ae8bea;
+	--ht-blaze-spruce: #45bac0;
+	--ht-blaze-spruce-text: #45bac0;
+	--ht-blaze-rose: #ee82b0;
+	--ht-blaze-rose-text: #ee82b0;
+	--ht-blaze-lichen: #b4c254;
+	--ht-blaze-lichen-text: #b4c254;
+	--ht-blaze-slate: #9aaac2;
+	--ht-blaze-slate-text: #9aaac2;
+	--ht-blaze-bark: #c99675;
+	--ht-blaze-bark-text: #c99675;
+	--ht-wash-mix: 16%;
+	--ht-shadow-overlay: none;
+	--ht-overlay-border: var(--ht-line);
+	--ht-scrim: rgb(0 0 0 / 55%);
+}
+
+/* Page gutter and desktop sizes (breakpoints: 768px two columns, 1024px sidebar). */
+@media (width >= 768px) {
+	:root {
+		--ht-gutter: 24px;
+	}
+}
+
+@media (width >= 1024px) {
+	:root {
+		--ht-gutter: 32px;
+		--ht-size-timer: 80px;
+		--ht-radius-panel: 16px;
+	}
+}

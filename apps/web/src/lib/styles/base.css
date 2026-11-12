@@ -1,0 +1,112 @@
+/* Base styles: element defaults on Blaze tokens. Components add their own scoped styles. */
+
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+
+html {
+	-webkit-text-size-adjust: 100%;
+	text-size-adjust: 100%;
+	background: var(--ht-paper);
+}
+
+body {
+	margin: 0;
+	min-height: 100dvh;
+	background: var(--ht-paper);
+	color: var(--ht-ink);
+	font: var(--ht-type-body);
+	-webkit-font-smoothing: antialiased;
+	-webkit-tap-highlight-color: transparent;
+}
+
+h1,
+h2,
+h3,
+h4,
+p,
+ul,
+ol,
+figure {
+	margin: 0;
+}
+
+h1 {
+	font: var(--ht-type-title);
+}
+
+h2 {
+	font: var(--ht-type-heading);
+}
+
+h3,
+h4 {
+	font: var(--ht-type-body-strong);
+}
+
+ul,
+ol {
+	padding: 0;
+	list-style: none;
+}
+
+img,
+svg {
+	display: block;
+}
+
+a {
+	color: var(--ht-ink);
+	text-underline-offset: 0.2em;
+}
+
+/* Inputs stay at 17px so iPhone Safari does not zoom. */
+button,
+input,
+select,
+textarea {
+	font: inherit;
+	color: inherit;
+}
+
+button {
+	cursor: pointer;
+}
+
+:focus-visible {
+	outline: var(--ht-focus-width) solid var(--ht-ink);
+	outline-offset: var(--ht-focus-offset);
+}
+
+::selection {
+	background: var(--ht-sunken);
+	color: var(--ht-ink);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0s !important;
+		transition-property: opacity !important;
+	}
+}
+
+/* Utilities shared by components. */
+.ht-visually-hidden {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip-path: inset(50%);
+	white-space: nowrap;
+	border: 0;
+}
+
+.ht-tabular {
+	font-variant-numeric: tabular-nums;
+}

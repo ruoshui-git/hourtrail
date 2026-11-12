@@ -13,7 +13,7 @@ This method comes from `temple_inventory` (`~/code/frappe_docker_wsl/development
 | Scope and test integrity are checked by eye                                                                | The runner writes `summary.txt`: report status, changed paths, any path **outside the brief's `owned` globs**, diffstat and test cases removed or skipped. `scripts/agent/verify NAME` runs the checks and compares test counts with `main`.                                    |
 | Runs live in `/tmp/codex-runs`, shared and lost on reboot                                                  | `.agent-runs/NAME/` in the repo, gitignored: `brief.md`, `events.jsonl`, `report.json`, `summary.txt`, `session`, `exit`, `shots/`.                                                                                                                                             |
 | Codex has no way to ask a question                                                                         | The brief tells it to stop with `status: "blocked"` and `questions` when a decision is missing. Answer with `--resume`.                                                                                                                                                         |
-| Heavy commands from different projects compete for 13 GB RAM                                               | `scripts/heavy` takes the same lock as `temple_inventory` (`~/code/frappe_docker_wsl/development/.locks/heavy.lock`) when it exists, otherwise `/tmp/hourtrail-heavy.lock`.                                                                                                     |
+| Heavy commands from different projects compete for 13 GB RAM                                               | `scripts/heavy` takes the same lock as `temple_inventory` (`~/code/frappe_docker_wsl/development/.locks/heavy.lock`) when it exists, otherwise `/tmp/hourtrail-heavy.lock`. Builds, E2E and screenshots take it; unit tests do not (see the smoke-run findings).                |
 | Secrets could leak into an agent's environment                                                             | The runner starts Codex with a minimal environment (PATH, HOME, locale, `HT_PORT_BASE`) and never passes Cloudflare or GitHub credentials. Only the orchestrator deploys.                                                                                                       |
 
 ## Usage budget (shared account)
@@ -83,4 +83,11 @@ Screenshots need a Chinese font: Noto Sans CJK SC in `~/.local/share/fonts` (no 
 
 ## Smoke-run findings
 
-To be filled in by task 0.2.
+Smoke-tested on 2026-11-12 with `codex-cli 0.166.0`, `gpt-6-luna` at low effort in fast mode (a trivial function plus test, then one `--resume` fix round). About 1% of the 5-hour window for both rounds together; each round took under a minute.
+
+- `--json` writes one JSON object per line: `thread.started` (with `thread_id`, the session id), `turn.started`, `item.started`/`item.completed` (agent messages, commands, file changes), `turn.completed` (with token usage). No rate-limit data appears in the stream; `codex-usage` reads it from `~/.codex/sessions` instead.
+- `--output-schema` works for new runs **and on `exec resume`**: `report.json` was valid JSON matching the schema both times. The prose fallback was not needed.
+- `exec resume` and `exec fork` do not accept `-C`; the runner starts them with the worktree as the working directory, which works.
+- On resume the runner moves the previous round's files to `round-N/` and keeps `brief.orig.md`, so `summary.txt` still checks scope against the original `owned` globs when the fix brief has no front matter.
+- `verify NAME` builds a `main` baseline of test counts once per `main` commit (in a temporary detached worktree) and fails when a task has fewer tests or more skipped tests than `main`.
+- Unit tests run **outside** the heavy lock. During bootstrap the shared lock was held for over ten minutes by a `temple_inventory` browser run; Hourtrail's Vitest suites are light. Builds, E2E and screenshots still take the lock.

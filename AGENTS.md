@@ -51,7 +51,7 @@ docs/            see above
 
 ## Validation
 
-Run from the repo root (or the task worktree). Heavy commands go through `scripts/heavy`.
+Run from the repo root (or the task worktree). Builds, E2E and screenshots go through `scripts/heavy` (a lock shared with another project, so it may wait); unit tests run directly.
 
 | Check           | Command                                                        | When                  |
 | --------------- | -------------------------------------------------------------- | --------------------- |

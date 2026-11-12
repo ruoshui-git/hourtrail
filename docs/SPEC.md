@@ -275,5 +275,6 @@ If a limit forces a compromise during implementation, record it in `docs/SPEC.md
 | ESLint / typescript-eslint / eslint-plugin-svelte | 10.14 / 8.72.2 / 3.24.1        | Flat config in `eslint.config.js`.                                                                                                                                                 |
 | Prettier / prettier-plugin-svelte                 | 3.10.1 / 4.1.1                 | Tabs, single quotes, width 100.                                                                                                                                                    |
 | Stylelint / config-standard                       | 18.0 / 41.0                    | Token rule in `stylelint.config.js`.                                                                                                                                               |
+| National Park font                                | fontsource 5.3.0 (font v4)     | Only the Latin variable woff2 is vendored in `apps/web/src/lib/styles/fonts/` with its OFL licence; the npm package is not a dependency.                                           |
 
 Exact versions are saved (`save-exact=true`); `pnpm-lock.yaml` is the record.
