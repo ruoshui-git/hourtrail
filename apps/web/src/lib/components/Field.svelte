@@ -30,6 +30,7 @@
 <style>
 	.field {
 		display: grid;
+
 		/* Keep label, control and hint packed at the top when a grid row is taller. */
 		align-content: start;
 		gap: var(--ht-space-2);
