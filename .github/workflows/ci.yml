@@ -3,10 +3,7 @@ name: CI
 on:
   push:
     branches: [main]
-    # Docs-only commits do not need the full check and E2E run (Actions minutes).
-    paths-ignore: ['docs/**', '**/*.md']
   pull_request:
-    paths-ignore: ['docs/**', '**/*.md']
 
 concurrency:
   group: ci-${{ github.ref }}

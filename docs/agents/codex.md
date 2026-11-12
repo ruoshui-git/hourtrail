@@ -88,7 +88,7 @@ Size: one coherent change reviewable in one sitting (roughly up to 600 changed l
 4. Verify in the worktree: `scripts/agent/verify NAME` (format, lint, types, unit tests, build, E2E when the task touches UI or sync, all under `scripts/heavy`); read the whole diff against the brief and SPEC; compare test edits with intent (Codex has weakened assertions before); open every screenshot and check real data, Chinese text, both themes and 390 px width. A blank or loading screenshot is a failure.
 5. Treat any report line like "a test failed once and did not reproduce" as a bug report: rerun that suite repeatedly until it fails and fix the cause (a flaky property test found a real `z.json()` data-loss bug).
 6. Fix rounds: trivial fixes yourself; after any fix of your own, rerun `pnpm check` before committing (a review fix once broke lint on `main`); substantive ones go back with `--resume SESSION` and a short fix brief (`--fork` if resume reports an active writer). After two rounds, take it over.
-7. Commit in the worktree, then land it with `scripts/agent/land NAME`, which rebases on `main`, refuses to merge unless `pnpm check` passes, fast-forwards, pushes and removes the worktree (a hand-written command chain once merged past a failing check). Update `docs/PROGRESS.md`, and add a changelog line to `UI_UX_DECISIONS.md` when behaviour changed.
+7. Commit in the worktree (Conventional Commit with a why-body), rebase on `main`, fast-forward merge, push, remove the worktree, update `docs/PROGRESS.md`, and add a changelog line to `UI_UX_DECISIONS.md` when behaviour changed.
 
 Screenshots need a Chinese font: Noto Sans CJK SC in `~/.local/share/fonts` (no sudo needed).
 

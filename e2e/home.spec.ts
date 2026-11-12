@@ -45,7 +45,7 @@ test('double tapping Start and reloading preserve one running session', async ({
 });
 
 test('restarting an item makes a second independent session', async ({ page }) => {
-	await page.clock.install({ time: new Date('2026-11-12T04:00:00-05:00') });
+	await page.clock.install({ time: new Date('2026-11-12T04:00:00') });
 	await page.goto('/');
 	await dismissInstallHint(page);
 	const search = page.getByRole('textbox', { name: 'Search or name a work item' });

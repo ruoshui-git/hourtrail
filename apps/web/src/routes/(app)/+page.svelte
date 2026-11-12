@@ -23,7 +23,13 @@
 	import { live } from '$lib/live.svelte';
 	import { requestPersistence } from '$lib/pwa/persist';
 	import { openSessionEditor } from '$lib/features/session/editor.svelte';
-	import { selectRecentItems, todayRibbonSegments, todayTotals } from '$lib/features/home/domain';
+	import {
+		runningPairKey,
+		runningResolutionChoices,
+		selectRecentItems,
+		todayRibbonSegments,
+		todayTotals,
+	} from '$lib/features/home/domain';
 	import { formatClock } from '$lib/components/trail';
 
 	type Session = RecordOf<'session'>;
@@ -46,10 +52,10 @@
 		{ sessions: [], types: [], items: [], places: [], reportingZone: deviceZone },
 	);
 	const running = live(() => repo.running(), [] as Session[]);
-	let runningSnapshot = $state<Session[]>([]);
-	let refreshedItems = $state<WorkItem[]>([]);
-	let refreshedSessions = $state<Session[]>([]);
-	let sessionNames = $state<Record<string, string>>({});
+	const keepBoth = live(
+		() => db.local.get('home_keep_both' as never),
+		null as { value?: unknown } | null,
+	);
 	let now = $state(Date.now());
 	let busy = $state(false);
 	let search = $state('');
@@ -58,11 +64,7 @@
 	let persistenceAsked = $state(false);
 	const currentDay = $derived(dayOf(now, today.current.reportingZone));
 	const bounds = $derived(dayBounds(currentDay, today.current.reportingZone));
-	const allSessions = $derived([
-		...new Map(
-			[...today.current.sessions, ...refreshedSessions].map((session) => [session.id, session]),
-		).values(),
-	]);
+	const allSessions = $derived(today.current.sessions);
 	const daySessions = $derived(
 		allSessions.filter((session) => {
 			const end = session.end_at ?? now;
@@ -72,9 +74,7 @@
 	const totals = $derived(
 		todayTotals(daySessions, today.current.types, currentDay, today.current.reportingZone, now),
 	);
-	const allItems = $derived([
-		...new Map([...today.current.items, ...refreshedItems].map((item) => [item.id, item])).values(),
-	]);
+	const allItems = $derived(today.current.items);
 	const pinned = $derived(
 		allItems
 			.filter(
@@ -89,7 +89,7 @@
 			allSessions,
 			new Set([
 				...pinned.map((item) => item.id),
-				...(running.current.length ? running.current : runningSnapshot)
+				...running.current
 					.map((session) => session.work_item_id)
 					.filter((id): id is string => id !== null),
 			]),
@@ -103,14 +103,9 @@
 				item.name.toLocaleLowerCase().includes(search.toLocaleLowerCase()),
 		),
 	);
-	const current = $derived(
-		(running.current.length ? running.current : runningSnapshot).at(-1) ?? null,
-	);
+	const current = $derived(running.current.at(-1) ?? null);
 	const currentItem = $derived(
-		current
-			? (allItems.find((item) => item.id === current.work_item_id) ??
-					(sessionNames[current.id] ? ({ name: sessionNames[current.id] } as WorkItem) : undefined))
-			: undefined,
+		current ? (allItems.find((item) => item.id === current.work_item_id) ?? undefined) : undefined,
 	);
 	const currentType = $derived(
 		current
@@ -139,14 +134,33 @@
 		{ at: bounds.start + 12 * 60 * 60_000, label: '12p' },
 		{ at: bounds.start + 18 * 60 * 60_000, label: '6p' },
 	]);
+	const keepBothKey = $derived(running.current.length === 2 ? runningPairKey(running.current) : '');
+	const resolutions = $derived(
+		runningResolutionChoices(
+			running.current,
+			new Map(allItems.map((item) => [item.id, item.name])),
+		),
+	);
+	const showRunningBanner = $derived(
+		running.current.length > 2 ||
+			(running.current.length === 2 && keepBoth.current?.value !== keepBothKey),
+	);
+	const runningBannerMessage = $derived(
+		running.current.length === 2
+			? 'Two sessions are running.'
+			: `${running.current.length} sessions are running: ${running.current
+					.map(
+						(session) =>
+							allItems.find((item) => item.id === session.work_item_id)?.name ?? 'Untitled session',
+					)
+					.join(', ')}.`,
+	);
 
 	$effect(() => {
 		const refresh = () => (now = Date.now());
 		const id = setInterval(refresh, 1000);
 		document.addEventListener('visibilitychange', refresh);
 		window.addEventListener('pageshow', refresh);
-		void repo.ensureSeeded();
-		void repo.running().then((rows) => (runningSnapshot = rows));
 		return () => {
 			clearInterval(id);
 			document.removeEventListener('visibilitychange', refresh);
@@ -158,16 +172,6 @@
 		const hours = Math.floor(minutes / 60);
 		const rest = minutes % 60;
 		return `${hours ? `${hours}h ` : ''}${String(rest).padStart(hours ? 2 : 1, '0')}m`;
-	}
-	async function refreshHome() {
-		const [rows, items, sessions] = await Promise.all([
-			repo.running(),
-			db.work_item.filter((item) => item.deleted_at === null).toArray(),
-			db.session.filter((session) => session.deleted_at === null).toArray(),
-		]);
-		runningSnapshot = rows;
-		refreshedItems = items;
-		refreshedSessions = sessions;
 	}
 	async function announceFirstSession() {
 		if (persistenceAsked) return;
@@ -185,16 +189,47 @@
 		try {
 			if (current) {
 				const result = await repo.switchTo({ workItemId: id });
-				await refreshHome();
 				await announceFirstSession();
 				showToast({
-					message: `Switched at ${formatClock(result.started.start_at)}.`,
+					message: `Switched to ${id ? (allItems.find((item) => item.id === id)?.name ?? 'Untitled session') : 'Untitled session'}`,
 					undo: () => repo.undo(result.undo),
 				});
 			} else {
 				const result = await repo.start({ workItemId: id });
-				await refreshHome();
 				if (!result.alreadyRunning) await announceFirstSession();
+			}
+			search = '';
+			sheet = null;
+		} finally {
+			busy = false;
+		}
+	}
+	async function nameCurrent(name: string) {
+		if (busy || !name.trim()) return;
+		busy = true;
+		try {
+			const normalized = name.trim();
+			let item = await db.work_item
+				.where('name')
+				.equals(normalized)
+				.filter((row) => row.archived_at === null && row.deleted_at === null)
+				.first();
+			item ??= await repo.create('work_item', {
+				name: normalized,
+				description: '',
+				type_id: WORK_TYPE_ID,
+				project_id: null,
+				place_id: null,
+				pinned_at: null,
+				pin_sort: 0,
+				archived_at: null,
+			});
+			if (current) {
+				await repo.update('session', current.id, { work_item_id: item.id });
+			} else {
+				const result = await repo.start({ workItemId: item.id });
+				await announceFirstSession();
+				showToast({ message: `${normalized} started.`, undo: () => repo.undo(result.undo) });
 			}
 			search = '';
 			sheet = null;
@@ -207,33 +242,34 @@
 		busy = true;
 		try {
 			const normalized = name.trim();
-			if (current) {
-				let item = await db.work_item
-					.where('name')
-					.equals(normalized)
-					.filter((row) => row.archived_at === null && row.deleted_at === null)
-					.first();
-				item ??= await repo.create('work_item', {
-					name: normalized,
-					description: '',
-					type_id: WORK_TYPE_ID,
-					project_id: null,
-					place_id: null,
-					pinned_at: null,
-					pin_sort: 0,
-					archived_at: null,
-				});
-				await repo.update('session', current.id, { work_item_id: item.id });
-				sessionNames = { ...sessionNames, [current.id]: item.name };
-				await refreshHome();
-			} else {
+			if (!current) {
 				const result = await repo.startNamed(normalized);
-				sessionNames = { ...sessionNames, [result.session.id]: result.workItem.name };
-				await refreshHome();
 				await announceFirstSession();
 				showToast({ message: `${normalized} started.`, undo: () => repo.undo(result.undo) });
+				search = '';
+				sheetQuery = '';
+				sheet = null;
+				return;
 			}
+			let item = await db.work_item
+				.where('name')
+				.equals(normalized)
+				.filter((row) => row.archived_at === null && row.deleted_at === null)
+				.first();
+			item ??= await repo.create('work_item', {
+				name: normalized,
+				description: '',
+				type_id: WORK_TYPE_ID,
+				project_id: null,
+				place_id: null,
+				pinned_at: null,
+				pin_sort: 0,
+				archived_at: null,
+			});
+			const result = await repo.switchTo({ workItemId: item.id });
+			showToast({ message: `Switched to ${item.name}`, undo: () => repo.undo(result.undo) });
 			search = '';
+			sheetQuery = '';
 			sheet = null;
 		} finally {
 			busy = false;
@@ -245,7 +281,6 @@
 		try {
 			const result = await repo.stop();
 			if (!result) return;
-			await refreshHome();
 			const elapsed = Math.max(
 				0,
 				Math.round((result.session.end_at! - result.session.start_at) / 60_000),
@@ -254,12 +289,45 @@
 				message: `Stopped at ${formatClock(result.session.end_at!)}. ${duration(elapsed)}`,
 				undo: async () => {
 					await repo.undo(result.undo);
-					runningSnapshot = await repo.running();
 				},
 				action: {
 					label: 'Add note',
 					run: () => openSessionEditor(result.session.id, { focus: 'note' }),
 				},
+			});
+		} finally {
+			busy = false;
+		}
+	}
+	async function resolveRunning(
+		kind: string,
+		ids: string[],
+		endAt?: number,
+		endTz?: string | null,
+	) {
+		if (busy) return;
+		busy = true;
+		try {
+			if (kind === 'keep-both') {
+				await db.local.put({
+					key: 'home_keep_both' as never,
+					value: runningPairKey(running.current),
+				});
+				return;
+			}
+			const resolvedAt = endAt ?? Date.now();
+			const zone = endTz ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
+			const undo = await repo.editMany(
+				'Resolve running sessions',
+				ids.map((id) => ({
+					entity: 'session' as const,
+					id,
+					changes: { end_at: resolvedAt, end_tz: zone },
+				})),
+			);
+			showToast({
+				message: 'Running sessions resolved.',
+				undo: () => repo.undo(undo),
 			});
 		} finally {
 			busy = false;
@@ -288,10 +356,24 @@
 
 <div class="home-grid">
 	<section class="summary" aria-label="Today">
-		{#if running.current.length > 1}<Banner
-				tone="caution"
-				message="Two sessions are running."
-			/>{/if}
+		{#if showRunningBanner}
+			<Banner tone="caution" message={runningBannerMessage} />
+			<div class="resolution-actions" aria-label="Resolve running sessions">
+				{#each resolutions as resolution (`${resolution.kind}:${resolution.label}`)}
+					<Button
+						variant="quiet"
+						{busy}
+						onclick={() =>
+							resolveRunning(
+								resolution.kind,
+								resolution.targetIds,
+								resolution.endAt,
+								resolution.endTz,
+							)}>{resolution.label}</Button
+					>
+				{/each}
+			</div>
+		{/if}
 		{#if current && currentType}
 			<RunningPanel
 				typeName={currentType.name}
@@ -302,8 +384,11 @@
 				placeName={currentPlace}
 				{now}
 				onstop={stop}
-				onswitch={() => (sheet = 'items')}
-				onname={startNamed}
+				onswitch={() => {
+					sheetQuery = '';
+					sheet = 'items';
+				}}
+				onname={nameCurrent}
 				ontypeclick={() => (sheet = 'types')}
 				onnameclick={() => (sheet = 'items')}
 			/>
@@ -394,7 +479,37 @@
 				onclick={() => chooseType(type)}><TypeTag name={type.name} color={type.color} /></button
 			>{/each}
 	{:else}
-		<Button variant="secondary" onclick={() => startItem(null)}>Untitled session</Button>
+		{#if pinned.length}
+			<section class="picker-list" aria-label="Pinned">
+				<h2>Pinned</h2>
+				{#each pinned as item (item.id)}{@const type =
+						today.current.types.find((row) => row.id === item.type_id) ??
+						DEFAULT_ACTIVITY_TYPES.find((row) => row.id === item.type_id)}{#if type}<WorkItemRow
+							name={item.name}
+							typeName={type.name}
+							typeColor={type.color}
+							pinned
+							disabled={busy}
+							onstart={() => startItem(item.id)}
+							onopen={() => itemName(item)}
+						/>{/if}{/each}
+			</section>
+		{/if}
+		{#if recent.length}
+			<section class="picker-list" aria-label="Recent">
+				<h2>Recent</h2>
+				{#each recent as item (item.id)}{@const type =
+						today.current.types.find((row) => row.id === item.type_id) ??
+						DEFAULT_ACTIVITY_TYPES.find((row) => row.id === item.type_id)}{#if type}<WorkItemRow
+							name={item.name}
+							typeName={type.name}
+							typeColor={type.color}
+							disabled={busy}
+							onstart={() => startItem(item.id)}
+							onopen={() => itemName(item)}
+						/>{/if}{/each}
+			</section>
+		{/if}
 		<Field label="Search items"
 			>{#snippet children({ id, describedBy, invalid })}<TextInput
 					bind:value={sheetQuery}
@@ -403,12 +518,21 @@
 					{invalid}
 				/>{/snippet}</Field
 		>
-		{#each today.current.items.filter((item) => item.archived_at === null && item.deleted_at === null && item.name
-					.toLowerCase()
-					.includes(sheetQuery.toLowerCase())) as item (item.id)}<button
-				class="choice"
-				onclick={() => startItem(item.id)}>{item.name}</button
-			>{/each}
+		{#if sheetQuery}
+			{#if !allItems.some((item) => item.name === sheetQuery.trim() && item.archived_at === null && item.deleted_at === null)}
+				<Button variant="secondary" {busy} onclick={() => startNamed(sheetQuery)}
+					>Start “{sheetQuery.trim()}”</Button
+				>
+			{/if}
+			{#each allItems.filter((item) => item.archived_at === null && item.deleted_at === null && item.name
+						.toLocaleLowerCase()
+						.includes(sheetQuery.toLocaleLowerCase())) as item (item.id)}
+				<button class="choice" disabled={busy} onclick={() => startItem(item.id)}
+					>{item.name}</button
+				>
+			{/each}
+		{/if}
+		<Button variant="secondary" {busy} onclick={() => startItem(null)}>Untitled session</Button>
 	{/if}
 </Sheet>
 
@@ -447,6 +571,21 @@
 	.item-lists section {
 		display: grid;
 		gap: var(--ht-space-2);
+	}
+
+	.picker-list {
+		display: grid;
+		gap: var(--ht-space-2);
+	}
+
+	.picker-list h2 {
+		font: var(--ht-type-label);
+	}
+
+	.resolution-actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--ht-space-1);
 	}
 
 	.matches {
