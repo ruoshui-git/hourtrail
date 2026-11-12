@@ -101,7 +101,7 @@ PRD section 18's failure list maps to tests you must see pass: repeated taps (un
 
 ## Notes
 
-- Polish list for task 4.6: session editor's work-item picker shows a search box and a select with the same name (cluttered); Backup page back link is a plain link while other Settings pages use a back button; Home date heading sits flush against the running panel on phones; DataTable period column wraps on phones ("Sep / 14"); a disabled quiet button shows an outline.
+- Polish list for task 4.6: sweep UI text to American English (Colour, metres, recognise, …) and add a unit test that fails on British spellings in .svelte text; session editor's work-item picker shows a search box and a select with the same name (cluttered); Backup page back link is a plain link while other Settings pages use a back button; Home date heading sits flush against the running panel on phones; DataTable period column wraps on phones ("Sep / 14"); a disabled quiet button shows an outline.
 - Task 3.4 decides pending dots before first sign-in: today every row shows one because nothing has synced; consider hiding them until the device has signed in once.
 - Performance note: `repo.running()` scans all sessions (IndexedDB cannot index null `end_at`); fine for thousands of sessions, revisit with a maintained running-session index if Start ever measures slow.
 

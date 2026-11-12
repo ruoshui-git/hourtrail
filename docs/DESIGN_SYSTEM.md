@@ -153,6 +153,8 @@ Disabled controls use `aria-disabled` styling only when they must stay focusable
 
 ## Voice
 
+UI text uses American English spelling (color, center, meters, gray, recognize, canceled, behavior, favorite); owner decision, 2026-11-12. Internal docs may differ.
+
 Plain verbs, sentence case, no exclamation marks, no apology. One name per thing through the whole app: Start, Stop, Switch, Add session, Work item, Activity type, Place, Note, Not recorded, Untitled session, Backed up, On this device only. An error says what happened and what to do: "Couldn't reach the cloud. Your changes are saved on this phone and will upload when you're back online." Durations read `2h 14m` in lists and `2:14:07` on the live timer; times and dates follow the device locale.
 
 ## Keeping the build on the design system

@@ -11,7 +11,7 @@ Shared guide for Codex and Claude. Hourtrail is a personal time tracker: an iPho
 - Add focused tests for every behaviour change. Never delete, skip or weaken an existing assertion to make a check pass; report it instead.
 - Do not add dependencies unless the brief lists them. Do not edit files outside the brief's `owned` globs.
 - UI: pages compose components from `apps/web/src/lib/components/` and use `--ht-*` tokens only. Do not add tokens, colours, font sizes or shared components; report the need instead.
-- English UI only; user content is any Unicode (test with `库存管理系统开发`, `第1寺院`, `修复洗手台`).
+- English UI only, in **American English** spelling (color, center, meters, gray, recognize, canceled, behavior); user content is any Unicode (test with `库存管理系统开发`, `第1寺院`, `修复洗手台`).
 - When a decision is missing, stop and report `blocked` with your questions instead of guessing.
 
 ## Documentation map
