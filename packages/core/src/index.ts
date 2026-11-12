@@ -3,3 +3,4 @@
  * No browser or Worker APIs belong in this package (see docs/SPEC.md).
  */
 export const APP_NAME = 'Hourtrail';
+export * from './blaze';
