@@ -76,7 +76,7 @@ Sentence case everywhere. Notes and descriptions wrap at about 70 characters on 
 
 ## Space, shape, motion
 
-- Spacing scale `--ht-space-1…8`: 4, 8, 12, 16, 24, 32, 48, 64. Page gutter 16 on phones, 24 from 768 px, 32 from 1024 px.
+- Spacing scale `--ht-space-1…8`: 4, 8, 12, 16, 24, 32, 48, 64. Page gutter 16 on phones, 24 from 768 px, 32 from 1024 px. Page content is capped at `--ht-content-max` (720 px) for lists and settings and `--ht-content-narrow` (560 px) for single-record forms; Home and History may use the full width for their two-column layouts.
 - Radii by role, not one value: blaze 2; controls and menus 12; filter chips fully round; sheets 20 on the top corners; the running panel has none on phones (a full-bleed band) and 16 on desktop.
 - Hairlines are 1 px `line`; control borders 1 px `line-strong`. Overlays use `--ht-shadow-overlay: 0 8px 32px rgb(23 33 29 / 0.18)` in light and a `line` border in dark. Static content has no shadow.
 - Touch targets at least 44 × 44. Start and Stop are 60 high and full width on phones.

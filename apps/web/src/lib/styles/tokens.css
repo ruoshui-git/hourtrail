@@ -137,6 +137,8 @@
 	--ht-sidebar-width: 220px;
 	--ht-dialog-min: 480px;
 	--ht-dialog-max: 560px;
+	--ht-content-max: 720px;
+	--ht-content-narrow: 560px;
 
 	/* Interaction (computed from ink so they follow the theme) */
 	--ht-hover: color-mix(in srgb, var(--ht-ink) 6%, transparent);
