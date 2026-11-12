@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+# Independently verify a Codex task in its worktree: format, lint, types, unit
+# tests (with counts compared against main), build, and E2E when the task
+# touches the apps or e2e/. Build and E2E go through scripts/heavy; unit tests
+# are light and run directly so they do not queue behind other projects' runs.
+#
+# Usage: verify NAME [--e2e|--no-e2e]     (NAME may be "." for the current checkout)
+
+name=${1:?Usage: verify NAME [--e2e|--no-e2e]}
+e2e=auto
+[[ ${2:-} == --e2e ]] && e2e=yes
+[[ ${2:-} == --no-e2e ]] && e2e=no
+export PATH="$HOME/.local/bin:$PATH"
+here=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+common=$(git -C "$here" rev-parse --path-format=absolute --git-common-dir)
+repo=$(dirname -- "$common")
+if [[ $name == . ]]; then dir=$(git rev-parse --show-toplevel); else dir=$repo/.worktrees/$name; fi
+[[ -d $dir ]] || { echo "verify: no worktree at $dir" >&2; exit 2; }
+heavy=$repo/scripts/heavy
+counts=$repo/scripts/agent/lib/test-counts.mjs
+fail=0
+step() {
+	local label=$1
+	shift
+	printf '== %s\n' "$label"
+	if (cd "$dir" && "$@"); then echo "   pass: $label"; else echo "   FAIL: $label"; fail=1; fi
+}
+
+# Unit tests with a JSON report per package, then a count.
+unit() {
+	(cd "$1" && find . -name .vitest-report.json -not -path '*/node_modules/*' -delete &&
+		pnpm -r --workspace-concurrency=1 test --reporter=dot --reporter=json \
+			--outputFile.json=.vitest-report.json)
+}
+
+step "pnpm install" pnpm install --frozen-lockfile --prefer-offline --reporter=silent
+step "format" pnpm format:check
+step "lint" pnpm lint
+step "types" pnpm typecheck
+step "unit tests" unit "$dir"
+here_counts=$(node "$counts" "$dir")
+
+# Baseline: main's counts, cached per commit.
+main_sha=$(git -C "$repo" rev-parse main)
+cache=$repo/.agent-runs/.test-counts/$main_sha
+if [[ ! -f $cache && $dir != "$repo" ]]; then
+	mkdir -p "$(dirname "$cache")"
+	base=$(mktemp -d)
+	git -C "$repo" worktree add -q --detach "$base/main" "$main_sha"
+	(cd "$base/main" && pnpm install --frozen-lockfile --prefer-offline --reporter=silent >/dev/null 2>&1 &&
+		unit "$base/main" >/dev/null 2>&1) || true
+	node "$counts" "$base/main" >"$cache" || true
+	git -C "$repo" worktree remove --force "$base/main" || true
+	rm -rf "$base"
+fi
+echo "== test counts"
+node "$counts" --compare "${cache:-/dev/null}" "$dir" || fail=1
+
+step "build" "$heavy" pnpm build
+
+if [[ $e2e == auto ]]; then
+	e2e=no
+	if [[ -f $dir/playwright.config.ts ]] &&
+		git -C "$dir" diff --name-only "$(git -C "$dir" merge-base main HEAD)" |
+		cat - <(git -C "$dir" ls-files --others --exclude-standard) | grep -qE '^(apps/|e2e/)'; then
+		e2e=yes
+	fi
+fi
+[[ $e2e == yes ]] && step "e2e" "$heavy" pnpm e2e
+
+if ((fail)); then echo "verify: FAILED"; exit 1; fi
+echo "verify: all checks passed ($here_counts)"

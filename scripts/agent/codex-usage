@@ -1,0 +1,191 @@
+#!/usr/bin/env node
+// Report the shared Codex usage windows and which model the budget allows.
+//
+//   codex-usage            human-readable report
+//   codex-usage --json     machine-readable report
+//   codex-usage --allow M  exit 0 if model M is allowed now, 3 if it should be
+//                          downgraded, 4 if launches should wait for the reset
+//
+// Reads the newest `rate_limits` from any Codex session file under
+// ~/.codex/sessions (every project on this account writes there), so the
+// numbers include other orchestrators' runs. Policy: docs/agents/codex.md.
+
+import { execFileSync } from 'node:child_process';
+import { closeSync, openSync, readdirSync, readSync, statSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+
+const SOL = 'gpt-6.1-sol';
+const root = join(homedir(), '.codex', 'sessions');
+const args = process.argv.slice(2);
+
+function recentFiles(dir, sinceMs) {
+	const out = [];
+	const walk = (d) => {
+		let entries;
+		try {
+			entries = readdirSync(d, { withFileTypes: true });
+		} catch {
+			return;
+		}
+		for (const e of entries) {
+			const p = join(d, e.name);
+			if (e.isDirectory()) walk(p);
+			else if (e.name.endsWith('.jsonl')) {
+				const st = statSync(p);
+				if (st.mtimeMs >= sinceMs) out.push({ p, mtime: st.mtimeMs });
+			}
+		}
+	};
+	walk(dir);
+	return out.sort((a, b) => b.mtime - a.mtime);
+}
+
+// Read the tail of a file and return the last rate_limits object with its timestamp.
+function lastRateLimits(file) {
+	const size = statSync(file).size;
+	const chunk = Math.min(size, 4 * 1024 * 1024);
+	const buf = Buffer.alloc(chunk);
+	const fd = openSync(file, 'r');
+	readSync(fd, buf, 0, chunk, size - chunk);
+	closeSync(fd);
+	const lines = buf.toString('utf8').split('\n');
+	for (let i = lines.length - 1; i >= 0; i--) {
+		const line = lines[i];
+		if (!line.includes('"rate_limits"')) continue;
+		try {
+			const ev = JSON.parse(line);
+			const rl = ev.payload?.rate_limits ?? ev.rate_limits;
+			if (rl?.primary) return { rl, at: Date.parse(ev.timestamp) || statSync(file).mtimeMs };
+		} catch {
+			// partial first line of the chunk
+		}
+	}
+	return null;
+}
+
+function runningCodex() {
+	try {
+		const out = execFileSync('ps', ['-eo', 'pid,etimes,args'], { encoding: 'utf8' });
+		return out
+			.split('\n')
+			.filter((l) => /\bcodex(\s|$)/.test(l) && /\sexec(\s|$)/.test(l) && !/\bbwrap\b/.test(l))
+			.map((l) => {
+				const m = l.trim().match(/^(\d+)\s+(\d+)\s+(.*)$/);
+				const model = m?.[3].match(/(?:-m\s+|model=\\?"?)(gpt-[\w.-]+)/)?.[1] ?? '?';
+				const cwd = m?.[3].match(/-C\s+(\S+)/)?.[1] ?? '';
+				return { pid: Number(m?.[1]), minutes: Math.round(Number(m?.[2]) / 60), model, cwd };
+			});
+	} catch {
+		return [];
+	}
+}
+
+const now = Date.now();
+let sample = null;
+for (const { p } of recentFiles(root, now - 7 * 24 * 3600e3).slice(0, 40)) {
+	const s = lastRateLimits(p);
+	if (s && (!sample || s.at > sample.at)) sample = s;
+	if (sample && sample.at > now - 3600e3) break; // fresh enough; files are sorted newest first
+}
+
+function windowState(w) {
+	if (!w) return null;
+	const resetsAt = w.resets_at * 1000;
+	const expired = resetsAt <= now;
+	return {
+		usedPercent: expired ? 0 : w.used_percent,
+		leftPercent: expired ? 100 : 100 - w.used_percent,
+		windowMinutes: w.window_minutes,
+		resetsAt: new Date(resetsAt).toISOString(),
+		minutesToReset: expired ? 0 : Math.round((resetsAt - now) / 60000),
+		expired,
+	};
+}
+
+const primary = windowState(sample?.rl.primary);
+const weekly = windowState(sample?.rl.secondary);
+const running = runningCodex();
+
+// Policy (docs/agents/codex.md, "Usage budget").
+let allow = 'unknown';
+let reason = 'no rate-limit sample found; assume Luna and check by hand';
+if (primary) {
+	const left = primary.leftPercent;
+	const weeklyOk = !weekly || weekly.usedPercent < 80;
+	const solRunning = running.some((r) => r.model === SOL);
+	if (left < 15) {
+		allow = 'hold';
+		reason = `only ${left}% of the 5-hour window left; wait ${primary.minutesToReset} min for the reset`;
+	} else if (
+		weeklyOk &&
+		!solRunning &&
+		(left >= 50 || (left >= 25 && primary.minutesToReset <= 60))
+	) {
+		allow = 'sol';
+		reason = `${left}% left, resets in ${primary.minutesToReset} min`;
+	} else {
+		allow = 'luna';
+		reason = !weeklyOk
+			? `weekly window ${weekly.usedPercent}% used`
+			: solRunning
+				? 'a Sol run is already active (one at a time)'
+				: `${left}% left and the reset is ${primary.minutesToReset} min away`;
+	}
+}
+
+const report = {
+	sampledAt: sample ? new Date(sample.at).toISOString() : null,
+	sampleAgeMinutes: sample ? Math.round((now - sample.at) / 60000) : null,
+	plan: sample?.rl.plan_type ?? null,
+	primary,
+	weekly,
+	running,
+	allow,
+	reason,
+};
+
+const allowIdx = args.indexOf('--allow');
+if (allowIdx >= 0) {
+	const model = args[allowIdx + 1] ?? '';
+	const wantsSol = model === SOL;
+	if (allow === 'hold') {
+		console.error(`codex-usage: hold: ${reason}`);
+		process.exit(4);
+	}
+	if (wantsSol && allow !== 'sol') {
+		console.error(`codex-usage: ${SOL} not allowed now (${reason}); use gpt-6-luna`);
+		process.exit(3);
+	}
+	process.exit(0);
+}
+
+if (args.includes('--json')) {
+	console.log(JSON.stringify(report, null, 2));
+	process.exit(0);
+}
+
+const local = (iso) =>
+	new Date(iso).toLocaleString('en-GB', {
+		weekday: 'short',
+		hour: '2-digit',
+		minute: '2-digit',
+		day: '2-digit',
+		month: 'short',
+	});
+if (!sample) {
+	console.log('codex-usage: no rate-limit data found in ~/.codex/sessions');
+} else {
+	console.log(
+		`5-hour window: ${primary.usedPercent}% used, resets ${local(primary.resetsAt)} (in ${primary.minutesToReset} min)`,
+	);
+	if (weekly)
+		console.log(`weekly window: ${weekly.usedPercent}% used, resets ${local(weekly.resetsAt)}`);
+	console.log(`sampled ${report.sampleAgeMinutes} min ago (plan: ${report.plan ?? '?'})`);
+}
+console.log(
+	running.length
+		? `running codex: ${running.map((r) => `${r.model} ${r.minutes}m ${r.cwd || ''}`.trim()).join('; ')}`
+		: 'running codex: none',
+);
+console.log(`allow: ${allow} (${reason})`);

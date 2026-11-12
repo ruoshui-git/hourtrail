@@ -1,0 +1,42 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "CodexTaskReport",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "status",
+    "summary",
+    "files_changed",
+    "checks",
+    "tests_added",
+    "deviations",
+    "assumptions",
+    "questions",
+    "docs_notes",
+    "screenshots"
+  ],
+  "properties": {
+    "status": { "type": "string", "enum": ["done", "partial", "blocked"] },
+    "summary": { "type": "string" },
+    "files_changed": { "type": "array", "items": { "type": "string" } },
+    "checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["command", "result", "detail"],
+        "properties": {
+          "command": { "type": "string" },
+          "result": { "type": "string", "enum": ["pass", "fail", "not_run"] },
+          "detail": { "type": "string" }
+        }
+      }
+    },
+    "tests_added": { "type": "array", "items": { "type": "string" } },
+    "deviations": { "type": "array", "items": { "type": "string" } },
+    "assumptions": { "type": "array", "items": { "type": "string" } },
+    "questions": { "type": "array", "items": { "type": "string" } },
+    "docs_notes": { "type": "array", "items": { "type": "string" } },
+    "screenshots": { "type": "array", "items": { "type": "string" } }
+  }
+}

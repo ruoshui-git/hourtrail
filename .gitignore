@@ -15,3 +15,4 @@ shots/
 .DS_Store
 .env
 .env.*
+.vitest-report.json

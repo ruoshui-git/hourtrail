@@ -1,0 +1,217 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+# Run one Codex task in its own git worktree with a structured JSON report,
+# a built-in watchdog and a scope/test-integrity summary. Launch it with Bash
+# run_in_background; it exits when the run ends. See docs/agents/codex.md.
+
+usage() {
+	cat >&2 <<'USAGE'
+Usage: codex-run NAME BRIEF [--model M] [--effort low|medium|high|xhigh]
+                 [--resume SESSION | --fork SESSION] [--timeout MIN] [--stall MIN]
+                 [--no-fast] [--force-model]
+
+  NAME           Task name: worktree .worktrees/NAME, branch task/NAME, run dir .agent-runs/NAME.
+  BRIEF          Brief file (front matter: owned, read_only, checks); - reads stdin.
+  --model M      gpt-6-luna (default) or gpt-6.1-sol. Never gpt-6-astra.
+  --effort E     Reasoning effort, default medium.
+  --resume ID    Continue an earlier session in the same worktree.
+  --fork ID      Continue in a new thread (when resume reports an active writer).
+  --timeout MIN  End the run with exit 124 after MIN minutes (default 75).
+  --stall MIN    End the run with exit 125 after MIN minutes without an event (default 15).
+  --no-fast      Do not use fast mode (service_tier="fast" is the default).
+  --force-model  Launch even when the usage budget says to downgrade or hold.
+USAGE
+	exit 2
+}
+
+[[ $# -ge 2 ]] || usage
+name=$1
+brief=$2
+shift 2
+[[ $name =~ ^[a-z0-9][a-z0-9._-]*$ ]] || {
+	echo "codex-run: NAME must be lowercase letters, digits, dot, dash or underscore" >&2
+	exit 2
+}
+model=gpt-6-luna
+effort=medium
+mode=()
+timeout_min=75
+stall_min=15
+fast=1
+force=0
+while [[ $# -gt 0 ]]; do
+	case $1 in
+		--model) model=${2:?}; shift 2 ;;
+		--effort) effort=${2:?}; shift 2 ;;
+		--resume) mode=(resume "${2:?}"); shift 2 ;;
+		--fork) mode=(fork "${2:?}"); shift 2 ;;
+		--timeout) timeout_min=${2:?}; shift 2 ;;
+		--stall) stall_min=${2:?}; shift 2 ;;
+		--no-fast) fast=0; shift ;;
+		--force-model) force=1; shift ;;
+		*) usage ;;
+	esac
+done
+[[ $model != *astra* ]] || { echo "codex-run: gpt-6-astra is not used on this project" >&2; exit 2; }
+
+export PATH="$HOME/.local/bin:$PATH"
+here=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+# Always operate from the main checkout, even when invoked from a worktree.
+common=$(git -C "$here" rev-parse --path-format=absolute --git-common-dir)
+repo=$(dirname -- "$common")
+wt=$repo/.worktrees/$name
+run=$repo/.agent-runs/$name
+schema=$repo/scripts/agent/report.schema.json
+
+# Budget check (shared Codex account; policy in docs/agents/codex.md).
+"$repo/scripts/agent/codex-usage" || true
+if ! "$repo/scripts/agent/codex-usage" --allow "$model"; then
+	if ((force)); then
+		echo "codex-run: --force-model given; launching $model anyway" >&2
+	else
+		echo "codex-run: refusing to launch $model; pick another model or pass --force-model" >&2
+		exit 3
+	fi
+fi
+
+mkdir -p "$run"
+if [[ -f $run/pid ]] && kill -0 "$(cat "$run/pid")" 2>/dev/null; then
+	echo "codex-run: $name is already running (pid $(cat "$run/pid"))" >&2
+	exit 1
+fi
+
+# Brief: copy it in (keep earlier rounds' files on resume/fork).
+if ((${#mode[@]})); then
+	round=1
+	while [[ -d $run/round-$round ]]; do round=$((round + 1)); done
+	mkdir -p "$run/round-$round"
+	for f in brief.md events.jsonl report.json summary.txt exit stderr.log; do
+		[[ -f $run/$f ]] && mv "$run/$f" "$run/round-$round/$f"
+	done
+	# The original brief keeps the owned globs; a fix brief may omit front matter.
+	[[ -f $run/brief.orig.md ]] || cp "$run/round-$round/brief.md" "$run/brief.orig.md" 2>/dev/null || true
+else
+	rm -f "$run"/{events.jsonl,report.json,summary.txt,exit,session,stderr.log,brief.orig.md}
+fi
+if [[ $brief == - ]]; then cat >"$run/brief.md"; else cp -- "$brief" "$run/brief.md"; fi
+[[ -f $run/brief.orig.md ]] || cp "$run/brief.md" "$run/brief.orig.md"
+
+# Worktree on task/NAME from main.
+if [[ ! -d $wt ]]; then
+	if git -C "$repo" show-ref --verify --quiet "refs/heads/task/$name"; then
+		git -C "$repo" worktree add -q "$wt" "task/$name"
+	else
+		git -C "$repo" worktree add -q -b "task/$name" "$wt" main
+	fi
+fi
+git -C "$wt" rev-parse HEAD >"$run/base"
+echo "codex-run: installing dependencies in $wt" >&2
+(cd "$wt" && pnpm install --frozen-lockfile --prefer-offline --reporter=silent) >"$run/install.log" 2>&1 || {
+	echo "codex-run: pnpm install failed; see $run/install.log" >&2
+	exit 1
+}
+
+# Port block: 20 ports per slot, lowest slot not held by a live run.
+if [[ ! -f $run/port ]]; then
+	used=" "
+	for p in "$repo"/.agent-runs/*/port; do
+		[[ -f $p ]] || continue
+		d=$(dirname "$p")
+		[[ $d == "$run" ]] && continue
+		[[ -f $d/pid ]] && kill -0 "$(cat "$d/pid")" 2>/dev/null && used+="$(cat "$p") "
+	done
+	slot=1
+	while [[ $used == *" $((5200 + slot * 20)) "* ]]; do slot=$((slot + 1)); done
+	echo $((5200 + slot * 20)) >"$run/port"
+fi
+port=$(cat "$run/port")
+
+# Writable roots beyond the worktree.
+shared_locks=$HOME/code/frappe_docker_wsl/development/.locks
+roots=("$run" "$HOME/.cache" /tmp "$(pnpm store path 2>/dev/null || echo "$HOME/.local/share/pnpm")")
+heavy_lock=/tmp/hourtrail-heavy.lock
+if [[ -d $shared_locks ]]; then
+	roots+=("$shared_locks")
+	heavy_lock=$shared_locks/heavy.lock
+fi
+printf -v roots_toml '"%s",' "${roots[@]}"
+
+cfg=(
+	-c "model_reasoning_effort=\"$effort\""
+	-c 'sandbox_mode="workspace-write"'
+	-c 'approval_policy="never"'
+	-c 'sandbox_workspace_write.network_access=true'
+	-c "sandbox_workspace_write.writable_roots=[${roots_toml%,}]"
+)
+((fast)) && cfg+=(-c 'service_tier="fast"')
+cmd=(codex exec)
+if ((${#mode[@]})); then
+	cmd+=("${mode[@]}")
+else
+	cmd+=(-C "$wt")
+fi
+cmd+=(--json -m "$model" "${cfg[@]}" --output-schema "$schema" -o "$run/report.json" -)
+
+{
+	echo "name=$name model=$model effort=$effort fast=$fast mode=${mode[*]:-new}"
+	echo "worktree=$wt port=$port started=$(date -Is)"
+} >"$run/meta"
+
+# Minimal environment: no Cloudflare or GitHub credentials reach Codex.
+envv=(
+	env -i
+	"PATH=$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin"
+	"HOME=$HOME"
+	"USER=${USER:-$(id -un)}"
+	"LANG=C.UTF-8"
+	"LC_ALL=C.UTF-8"
+	"TERM=dumb"
+	"HT_PORT_BASE=$port"
+	"HT_RUN_DIR=$run"
+	"HT_HEAVY_LOCK=$heavy_lock"
+)
+
+echo $$ >"$run/pid"
+trap 'rm -f "$run/pid"' EXIT
+set +e
+(cd "$wt" && exec "${envv[@]}" "${cmd[@]}" <"$run/brief.md" >"$run/events.jsonl" 2>"$run/stderr.log") &
+cpid=$!
+
+# Watchdog: total timeout and stall (no new event) limits.
+start=$(date +%s)
+status=
+while kill -0 "$cpid" 2>/dev/null; do
+	sleep 10
+	now=$(date +%s)
+	last=$(stat -c %Y "$run/events.jsonl" 2>/dev/null || echo "$start")
+	if ((now - start >= timeout_min * 60)); then
+		status=124
+		echo "codex-run: timeout after $timeout_min min" >>"$run/stderr.log"
+	elif ((now - last >= stall_min * 60)); then
+		status=125
+		echo "codex-run: no event for $stall_min min" >>"$run/stderr.log"
+	fi
+	if [[ -n $status ]]; then
+		pkill -TERM -P "$cpid" 2>/dev/null
+		kill -TERM "$cpid" 2>/dev/null
+		sleep 5
+		pkill -KILL -P "$cpid" 2>/dev/null
+		kill -KILL "$cpid" 2>/dev/null
+		break
+	fi
+done
+wait "$cpid"
+rc=$?
+set -e
+status=${status:-$rc}
+echo "$status" >"$run/exit"
+
+node "$repo/scripts/agent/lib/session-id.mjs" "$run/events.jsonl" >"$run/session.new" 2>/dev/null &&
+	[[ -s $run/session.new ]] && mv "$run/session.new" "$run/session"
+rm -f "$run/session.new"
+
+node "$repo/scripts/agent/lib/summarize.mjs" "$name" >"$run/summary.txt" 2>>"$run/stderr.log" ||
+	echo "summary failed; see $run/stderr.log" >"$run/summary.txt"
+cat "$run/summary.txt"
+exit "$status"
