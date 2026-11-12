@@ -7,7 +7,7 @@ export default defineConfig({
 	testMatch: 'shots.spec.ts',
 	fullyParallel: true,
 	workers: 2,
-	use: { baseURL: `http://localhost:${port}` },
+	use: { baseURL: `http://localhost:${port}`, timezoneId: 'America/New_York', locale: 'en-US' },
 	projects: ['light', 'dark'].flatMap((colorScheme) => [
 		{
 			name: `phone-${colorScheme}`,

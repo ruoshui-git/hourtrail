@@ -9,6 +9,12 @@ const directory =
 
 for (const route of SHOT_ROUTES) {
 	test(route.name, async ({ page }, testInfo) => {
+		// A fixed clock makes elapsed times, today's ribbon and dates repeatable.
+		await page.clock.setFixedTime(new Date('2026-11-12T10:30:00-05:00'));
+		if (route.seed) {
+			await page.goto(`/dev/seed?scenario=${route.seed}`);
+			await expect(page.locator('[data-seed-status]')).toHaveText(`Seeded ${route.seed}`);
+		}
 		await page.goto(route.path);
 		await expect(page.locator('main h1')).toBeVisible();
 		// SvelteKit's SPA fallback mounts asynchronously. A usable control proves hydration.
