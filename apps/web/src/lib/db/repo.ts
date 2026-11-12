@@ -43,6 +43,15 @@ export interface Repo {
 	switchTo(opts: {
 		workItemId: string | null;
 	}): Promise<{ stopped: Session | null; started: Session; undo: UndoToken }>;
+	/**
+	 * Patch several records in one transaction with one undo token (for example
+	 * resolving two running sessions, or reassigning sessions when merging places).
+	 * Edits that change nothing are skipped; a missing record throws and nothing is written.
+	 */
+	editMany(
+		label: string,
+		edits: { entity: Entity; id: string; changes: Record<string, unknown> }[],
+	): Promise<UndoToken>;
 	undo(token: UndoToken): Promise<void>;
 }
 
@@ -260,6 +269,19 @@ export function createRepo(
 				const started = await start(opts.workItemId, ctx, undo);
 				return { stopped, started, undo };
 			}),
+		editMany: (label, edits) =>
+			transaction(
+				edits.map((edit) => edit.entity),
+				async (now) => {
+					const undo = token(label);
+					const ctx = await context(now);
+					for (const edit of edits) {
+						const before = await required(edit.entity, edit.id);
+						await patch(edit.entity, before, edit.changes as Partial<AnyRecord>, ctx, undo);
+					}
+					return undo;
+				},
+			),
 		undo: (undo) =>
 			transaction(
 				undo.mutations.map((m) => m.entity),

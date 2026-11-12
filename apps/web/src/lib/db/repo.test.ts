@@ -446,3 +446,38 @@ it('replaying the outbox reproduces every store for random repository sequences 
 		{ numRuns: 200 },
 	);
 }, 60000);
+
+describe('editMany', () => {
+	it('patches several records in one transaction with one undo token', async () => {
+		const { db, repo } = fixture();
+		const a = await repo.create('project', { name: 'A', archived_at: null });
+		const b = await repo.create('project', { name: 'B', archived_at: null });
+		const before = await db.outbox.count();
+		const undo = await repo.editMany('Rename', [
+			{ entity: 'project', id: a.id, changes: { name: '甲' } },
+			{ entity: 'project', id: b.id, changes: { name: 'B' } }, // no change: skipped
+			{ entity: 'project', id: b.id, changes: { archived_at: 5 } },
+		]);
+		expect(undo.mutations).toHaveLength(2);
+		expect((await db.project.get(a.id))?.name).toBe('甲');
+		expect((await db.project.get(b.id))?.archived_at).toBe(5);
+		expect(await db.outbox.count()).toBe(before + 2);
+		await repo.undo(undo);
+		expect((await db.project.get(a.id))?.name).toBe('A');
+		expect((await db.project.get(b.id))?.archived_at).toBeNull();
+	});
+
+	it('writes nothing when any record is missing', async () => {
+		const { db, repo } = fixture();
+		const a = await repo.create('project', { name: 'A', archived_at: null });
+		const before = await db.outbox.count();
+		await expect(
+			repo.editMany('Rename', [
+				{ entity: 'project', id: a.id, changes: { name: 'changed' } },
+				{ entity: 'project', id: '00000000-0000-7000-8000-00000000dead', changes: { name: 'x' } },
+			]),
+		).rejects.toThrow();
+		expect((await db.project.get(a.id))?.name).toBe('A');
+		expect(await db.outbox.count()).toBe(before);
+	});
+});
