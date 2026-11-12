@@ -14,3 +14,4 @@ export { default as SegmentedControl } from './SegmentedControl.svelte';
 export { default as FilterChip } from './FilterChip.svelte';
 export * from './index.domain';
 export * from './index.charts';
+export * from './index.overlays';

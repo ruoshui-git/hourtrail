@@ -58,10 +58,34 @@ for (const route of SHOT_ROUTES) {
 			'scrollWidth',
 			await page.evaluate(() => window.innerWidth),
 		);
+		const overlay = route.path.includes('?open=');
+		if (overlay) {
+			// Overlays are captured in the viewport, with the open overlay in view.
+			const open = page.locator('[role="dialog"], [role="alertdialog"], [role="menu"]').first();
+			await expect(open).toBeVisible();
+			await open.scrollIntoViewIfNeeded();
+		}
 		await mkdir(directory, { recursive: true });
+		if (route.name === 'gallery') {
+			// The whole gallery is taller than the 32767 px screenshot limit at 2x, so
+			// capture one image per section (named after its heading order).
+			const sections = page.locator('main > section');
+			const count = await sections.count();
+			expect(count).toBeGreaterThan(5);
+			for (let i = 0; i < count; i++) {
+				await sections.nth(i).screenshot({
+					path: join(
+						directory,
+						`${route.name}-${String(i + 1).padStart(2, '0')}-${testInfo.project.name}.png`,
+					),
+					animations: 'disabled',
+				});
+			}
+			return;
+		}
 		await page.screenshot({
 			path: join(directory, `${route.name}-${testInfo.project.name}.png`),
-			fullPage: true,
+			fullPage: !overlay,
 			animations: 'disabled',
 		});
 	});
