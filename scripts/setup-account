@@ -1,0 +1,134 @@
+#!/usr/bin/env node
+// Create (or rotate) the Hourtrail account key for one environment and store the
+// Worker secrets it needs. See docs/RUNBOOK.md "Account key and devices".
+//
+//   scripts/setup-account --env staging|production [--save FILE] [--rotate-vapid] [--dry-run]
+//
+// - Generates a 160-bit account key, shown ONCE as HT1-XXXX-XXXX-… (Crockford base32).
+// - Stores only its SHA-256 as the Worker secret ACCOUNT_KEY_HASH.
+// - Generates the VAPID key pair (VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY) the first time,
+//   or again with --rotate-vapid (rotating invalidates existing push subscriptions).
+// - --save FILE writes the key to FILE (mode 600) for the orchestrator's staging tests.
+//   Never use --save for production: the owner runs this for production in their own
+//   terminal so the key never enters an agent transcript.
+//
+// Canonical form and hash (contract for task 3.2): the key is "HT1-" followed by 32
+// Crockford base32 characters with no group dashes; ACCOUNT_KEY_HASH is the lowercase
+// hex SHA-256 of that canonical string (UTF-8). Input normalisation: trim, uppercase,
+// drop spaces and dashes, strip the leading "HT1", map O→0 and I/L→1.
+
+import { spawnSync } from 'node:child_process';
+import { createHash, randomBytes, webcrypto } from 'node:crypto';
+import { writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+const args = process.argv.slice(2);
+const opt = (name) => {
+	const i = args.indexOf(name);
+	return i >= 0 ? args[i + 1] : undefined;
+};
+const env = opt('--env');
+const save = opt('--save');
+const dryRun = args.includes('--dry-run');
+const rotateVapid = args.includes('--rotate-vapid');
+if (env !== 'staging' && env !== 'production') {
+	console.error(
+		'Usage: setup-account --env staging|production [--save FILE] [--rotate-vapid] [--dry-run]',
+	);
+	process.exit(2);
+}
+if (env === 'production' && save) {
+	console.error(
+		'setup-account: --save is not allowed for production; write the key into your password manager.',
+	);
+	process.exit(2);
+}
+
+const worker = join(dirname(fileURLToPath(import.meta.url)), '..', 'apps', 'worker');
+
+function base32(bytes) {
+	let bits = 0;
+	let value = 0;
+	let out = '';
+	for (const b of bytes) {
+		value = (value << 8) | b;
+		bits += 8;
+		while (bits >= 5) {
+			out += ALPHABET[(value >>> (bits - 5)) & 31];
+			bits -= 5;
+		}
+	}
+	if (bits > 0) out += ALPHABET[(value << (5 - bits)) & 31];
+	return out;
+}
+
+const b64url = (buf) => Buffer.from(buf).toString('base64url');
+
+function wrangler(argv, input) {
+	const r = spawnSync('pnpm', ['exec', 'wrangler', ...argv], {
+		cwd: worker,
+		input,
+		encoding: 'utf8',
+		stdio: [input === undefined ? 'inherit' : 'pipe', 'pipe', 'pipe'],
+	});
+	return r;
+}
+
+function putSecret(name, value) {
+	if (dryRun) {
+		console.log(`  (dry run) would set ${name} on --env ${env}`);
+		return;
+	}
+	const r = wrangler(['secret', 'put', name, '--env', env], value);
+	if (r.status !== 0) {
+		console.error(r.stdout, r.stderr);
+		console.error(`setup-account: failed to set ${name}. Is the Worker deployed for --env ${env}?`);
+		process.exit(1);
+	}
+	console.log(`  set ${name}`);
+}
+
+const body = base32(randomBytes(20)); // 160 bits -> 32 characters
+const canonical = `HT1-${body}`;
+const display = `HT1-${body.match(/.{4}/g).join('-')}`;
+const hash = createHash('sha256').update(canonical, 'utf8').digest('hex');
+
+let haveVapid = false;
+if (!dryRun) {
+	const list = wrangler(['secret', 'list', '--env', env, '--format', 'json']);
+	haveVapid = list.status === 0 && list.stdout.includes('"VAPID_PUBLIC_KEY"');
+}
+
+console.log(`Setting Hourtrail secrets for ${env}...`);
+putSecret('ACCOUNT_KEY_HASH', hash);
+if (!haveVapid || rotateVapid) {
+	const pair = await webcrypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, [
+		'sign',
+		'verify',
+	]);
+	const pub = b64url(await webcrypto.subtle.exportKey('raw', pair.publicKey));
+	const jwk = await webcrypto.subtle.exportKey('jwk', pair.privateKey);
+	putSecret('VAPID_PUBLIC_KEY', pub);
+	putSecret(
+		'VAPID_PRIVATE_KEY',
+		JSON.stringify({ kty: jwk.kty, crv: jwk.crv, x: jwk.x, y: jwk.y, d: jwk.d }),
+	);
+} else {
+	console.log('  kept the existing VAPID keys (pass --rotate-vapid to replace them)');
+}
+
+if (save) {
+	writeFileSync(save, `${display}\n`, { mode: 0o600 });
+	console.log(`Saved the ${env} account key to ${save}.`);
+} else {
+	console.log('');
+	console.log(`Your ${env} account key (shown once; store it in your password manager now):`);
+	console.log('');
+	console.log(`    ${display}`);
+	console.log('');
+	console.log(
+		'Anyone with this key can sign in to your Hourtrail data. Signed-in devices stay signed in after a rotation.',
+	);
+}

@@ -145,7 +145,7 @@ Disabled controls use `aria-disabled` styling only when they must stay focusable
 - Identity is never colour alone: a legend whenever two or more types appear (mark-shaped keys: a small blaze), direct labels only where they fit (a bar's total at its tip), and a `DataTable` with the same numbers under every chart. Text never takes a blaze colour.
 - Hover and keyboard focus: each bar or segment is its own target (with a hit area larger than the mark), lifts slightly (opacity change) and shows one tooltip listing every type for that bar, value first in ink, type name second with a blaze key. The tooltip enhances, never gates: every value is also in the table. Insert names as text, never as HTML.
 - `StatTile`: the figure in `figure` (display face, proportional figures), the label below it in `label`, `ink-2`, sentence case, no colon; no box.
-- Known limit, to raise at Gate 0: the palette validator finds Work (`lake`) and Overhead (`slate`) too close for some readers (normal-vision ΔE 13 light, 10 dark; floor 15), and `rowan`/`fern` too close under deuteranopia. The legend, labels, gaps and table above are mandatory partly for this reason.
+- Known limit: the palette check finds `rowan`/`fern` and `rose`/`fern` close under deuteranopia, and `slate` close to `lake` for everyone (which is why Overhead defaults to `rose`, decided 2026-11-12). The legend, labels, gaps and table above are mandatory partly for this reason.
 
 **Theme.** `data-theme` on `<html>` (`light`, `dark`, or absent for system) is the only switch; components never read the theme.
 

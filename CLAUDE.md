@@ -12,3 +12,4 @@ You write briefs, delegate implementation to Codex, verify independently, commit
 - Two failed fix rounds: implement it yourself or hand it to a Claude subagent. Never `gpt-6-astra`.
 - Ask the owner before any production deploy, anything public, or any destructive action on cloud data. You may create and push to the private repos `ruoshui-git/hourtrail` and `ruoshui-git/hourtrail-backups` and configure their Actions.
 - Load the `frontend-design` skill only at task 0.4/Gate 0, for a gap in DESIGN_SYSTEM.md, and at task 4.6.
+- Standing owner approval (2026-11-12): deploy production yourself once a milestone's automated gate passes, then report; keep building through gates and fold in owner feedback when it arrives. Destructive cloud-data actions still need the owner.

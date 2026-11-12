@@ -21,13 +21,18 @@ Operational procedures: setup, deploy, keys, backups, restore and recovery. Arch
 
 The production origin must never change: an installed iPhone app is bound to it.
 
-## One-time owner actions
+## One-time owner actions (done together on 2026-11-12)
 
-| When            | Action                                                                                                                                                                                                                                                                                             |
-| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Before task 0.5 | Run `pnpm exec wrangler login` once in the repo (browser sign-in to Cloudflare).                                                                                                                                                                                                                   |
-| After task 0.5  | Create a Cloudflare API token (Workers Scripts edit, D1 edit, for this account only) and store it without pasting it anywhere: `gh secret set CLOUDFLARE_API_TOKEN --repo ruoshui-git/hourtrail` (prompts for the value), plus `gh secret set CLOUDFLARE_ACCOUNT_ID --repo ruoshui-git/hourtrail`. |
-| Gate 3          | Run `scripts/setup-account --env production` and `scripts/setup-backup-key` in your own terminal; store both secrets in the password manager; approve the production deploy.                                                                                                                       |
+| Action                                                                                                                                            | Why                                                  |
+| ------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| `pnpm exec wrangler login` in the repo                                                                                                            | Orchestrator deploys and manages D1                  |
+| GitHub token: access to `hourtrail` and `hourtrail-backups` with Contents, Workflows, Administration, Actions, Secrets and Variables (read/write) | Push, CI, repo secrets and variables                 |
+| Cloudflare API token "Edit Cloudflare Workers" + D1 Edit, set as `CLOUDFLARE_API_TOKEN` in `hourtrail`                                            | CI staging deploys                                   |
+| Cloudflare API token with D1 Edit only, set as `CLOUDFLARE_D1_TOKEN` in `hourtrail-backups`                                                       | Nightly `wrangler d1 export`                         |
+| `age-keygen`: private key to the password manager, recipient as the `AGE_RECIPIENT` variable in `hourtrail-backups`                               | Encrypting nightly dumps                             |
+| `scripts/setup-account --env production` in the owner's own terminal                                                                              | Production account key; never in an agent transcript |
+
+The account ID (`c41859cdba545f9c1b16de4357176e53`) is not secret and lives in the `CLOUDFLARE_ACCOUNT_ID` repository variable. The staging account key is in `.secrets/staging-account-key` (gitignored, mode 600) for the orchestrator's tests.
 
 ## Deploy _(to be completed by task 0.5)_
 

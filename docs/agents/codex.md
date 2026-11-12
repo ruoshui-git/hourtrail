@@ -26,9 +26,10 @@ The Codex account is shared with the `temple_inventory` orchestrator, which also
 | ----------------------------------------------------- | ------------- | ------------------------------------------------------------ | ------------------------ |
 | ≥ 50% left, or ≥ 25% left and it resets within 60 min | < 80% used    | Sol                                                          | Luna                     |
 | Otherwise, ≥ 15% left                                 | any           | Luna high (note the downgrade in PROGRESS and review harder) | Luna                     |
-| < 15% left                                            | any           | Hold until the reset, or do it yourself / Claude subagent    | Hold, or do it yourself  |
+| < 15% left                                            | any           | Hold: wait for the reset (owner preference)                  | Hold: wait for the reset |
 
 - `codex-run --model gpt-6.1-sol` refuses when the policy says Luna, unless `--force-model` is given. Use that only for a task that has already failed on Luna.
+- **When the window runs out, wait for the reset** instead of implementing Codex's tasks yourself (owner preference, 2026-11-12). While waiting, do orchestrator work that needs no Codex (reviews, briefs, docs, merges), and keep your prompt cache warm: start a background timer (Bash `sleep 3300` with `run_in_background`) so you are woken at least every 55 minutes, recheck `codex-usage`, and re-arm until the window has room.
 - Run at most one Sol task at a time. Check usage before each batch of launches, not only the first.
 - `codex exec review` second opinions (auth, sync, time, migrations) count against the same window: use Sol for them only when the policy allows Sol, otherwise Luna high.
 

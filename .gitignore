@@ -16,3 +16,4 @@ shots/
 .env
 .env.*
 .vitest-report.json
+.secrets/
