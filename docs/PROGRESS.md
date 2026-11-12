@@ -105,5 +105,6 @@ PRD section 18's failure list maps to tests you must see pass: repeated taps (un
 - 2026-11-12: Task 0.4 split into 0.4a/b/c to keep each brief reviewable; the gallery auto-registers section files so 0.4b and 0.4c can run in parallel.
 - 2026-11-12: The dataviz palette check flagged Work (lake) vs Overhead (slate) as too close; the owner chose `rose` for Overhead. Charts keep legends, labels, gaps and tables.
 - 2026-11-12: Owner granted standing approval for production deploys after a passing gate, and asked to keep building through gates.
+- 2026-11-12: Owner decisions: Hourtrail uses its own heavy lock; when Codex is out of quota, tasks go to Claude Haiku subagents.
 - 2026-11-12: Playwright WebKit cannot launch on the host without system libraries (`sudo apt-get install libevent-2.1-7t64 libgstreamer-plugins-bad1.0-0 libavif16 gstreamer1.0-libav`); Chromium E2E passes. CI installs them with `--with-deps`.
 - 2026-11-12: Owner corrected the Codex instruction: no fast mode by default (`codex-run --fast` to opt in). Task 0.4a was already running in fast mode.

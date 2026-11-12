@@ -13,7 +13,7 @@ This method comes from `temple_inventory` (`~/code/frappe_docker_wsl/development
 | Scope and test integrity are checked by eye                                                                | The runner writes `summary.txt`: report status, changed paths, any path **outside the brief's `owned` globs**, diffstat and test cases removed or skipped. `scripts/agent/verify NAME` runs the checks and compares test counts with `main`.                                    |
 | Runs live in `/tmp/codex-runs`, shared and lost on reboot                                                  | `.agent-runs/NAME/` in the repo, gitignored: `brief.md`, `events.jsonl`, `report.json`, `summary.txt`, `session`, `exit`, `shots/`.                                                                                                                                             |
 | Codex has no way to ask a question                                                                         | The brief tells it to stop with `status: "blocked"` and `questions` when a decision is missing. Answer with `--resume`.                                                                                                                                                         |
-| Heavy commands from different projects compete for 13 GB RAM                                               | `scripts/heavy` takes the same lock as `temple_inventory` (`~/code/frappe_docker_wsl/development/.locks/heavy.lock`) when it exists, otherwise `/tmp/hourtrail-heavy.lock`. Builds, E2E and screenshots take it; unit tests do not (see the smoke-run findings).                |
+| Heavy commands from parallel tasks compete for 13 GB RAM                                                   | `scripts/heavy` serialises builds, E2E and screenshots across all Hourtrail worktrees with its own lock, `/tmp/hourtrail-heavy.lock`. It is deliberately **not** shared with `temple_inventory` (owner decision, 2026-11-12); watch `free -g` instead.                          |
 | Secrets could leak into an agent's environment                                                             | The runner starts Codex with a minimal environment (PATH, HOME, locale, `HT_PORT_BASE`) and never passes Cloudflare or GitHub credentials. Only the orchestrator deploys.                                                                                                       |
 
 ## Usage budget (shared account)
@@ -29,9 +29,18 @@ The Codex account is shared with the `temple_inventory` orchestrator, which also
 | < 15% left                                            | any           | Hold: wait for the reset (owner preference)                  | Hold: wait for the reset |
 
 - `codex-run --model gpt-6.1-sol` refuses when the policy says Luna, unless `--force-model` is given. Use that only for a task that has already failed on Luna.
-- **When the window runs out, wait for the reset** instead of implementing Codex's tasks yourself (owner preference, 2026-11-12). While waiting, do orchestrator work that needs no Codex (reviews, briefs, docs, merges), and keep your prompt cache warm: start a background timer (Bash `sleep 3300` with `run_in_background`) so you are woken at least every 55 minutes, recheck `codex-usage`, and re-arm until the window has room.
+- **When the window runs out, continue with Claude Haiku subagents** (owner decision, 2026-11-12, replacing "wait for the reset"). See "Haiku fallback" below. Keep the orchestrator's prompt cache warm during any wait: a background `sleep 3300` timer wakes you at least every 55 minutes.
 - Run at most one Sol task at a time. Check usage before each batch of launches, not only the first.
 - `codex exec review` second opinions (auth, sync, time, migrations) count against the same window: use Sol for them only when the policy allows Sol, otherwise Luna high.
+
+## Haiku fallback
+
+When `codex-usage` says `hold`, run queued tasks as Claude Haiku subagents instead of waiting:
+
+1. Create the worktree and run directory as `codex-run` would: `git worktree add -b task/NAME .worktrees/NAME main`, `pnpm install --frozen-lockfile --prefer-offline` there, copy the brief to `.agent-runs/NAME/brief.md` and `brief.orig.md`, pick an unused `HT_PORT_BASE`.
+2. Spawn the Agent tool with `model: "haiku"` (general-purpose), `run_in_background`, and a prompt that is the brief plus: work only in `.worktrees/NAME`, export `HT_PORT_BASE` and `HT_RUN_DIR` for every command, put screenshots in `.agent-runs/NAME/shots/`, do not commit, and end with the report JSON (same fields as `report.schema.json`), also written to `.agent-runs/NAME/report.json`.
+3. When it finishes, run `node scripts/agent/lib/summarize.mjs NAME > .agent-runs/NAME/summary.txt` and verify exactly as for Codex. Haiku is weaker than Luna: prefer it for scoped UI, wiring and test tasks, read the diff more closely, and send fix rounds back to the same agent (SendMessage) before taking over.
+4. Sol-tier logic (`packages/core`, sync, auth) may wait for the reset when it is under an hour away; otherwise brief Haiku with the contract and review twice as hard. Record the model used in PROGRESS.
 
 ## Fast mode
 

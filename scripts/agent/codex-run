@@ -128,13 +128,8 @@ fi
 port=$(cat "$run/port")
 
 # Writable roots beyond the worktree.
-shared_locks=$HOME/code/frappe_docker_wsl/development/.locks
 roots=("$run" "$HOME/.cache" /tmp "$(pnpm store path 2>/dev/null || echo "$HOME/.local/share/pnpm")")
 heavy_lock=/tmp/hourtrail-heavy.lock
-if [[ -d $shared_locks ]]; then
-	roots+=("$shared_locks")
-	heavy_lock=$shared_locks/heavy.lock
-fi
 printf -v roots_toml '"%s",' "${roots[@]}"
 
 cfg=(
