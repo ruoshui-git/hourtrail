@@ -1,0 +1,365 @@
+<script lang="ts">
+	import { formatMinutes } from '$lib/format';
+	import {
+		NEW_WORK_ITEM_TYPE_ID,
+		readSetting,
+		sessionMinutes,
+		toLocalDateTime,
+	} from '@hourtrail/core';
+	import type { EditorRequest } from './editor.svelte';
+	import { db, repo } from '$lib/db/app';
+	import { live } from '$lib/live.svelte';
+	import Field from '$lib/components/Field.svelte';
+	import TextInput from '$lib/components/TextInput.svelte';
+	import TextArea from '$lib/components/TextArea.svelte';
+	import Button from '$lib/components/Button.svelte';
+	import Banner from '$lib/components/Banner.svelte';
+	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
+	import { showToast } from '$lib/components/toasts.svelte';
+	import { sessionWarnings, validateSessionTimes } from './validate';
+
+	let { request, onclose }: { request: EditorRequest; onclose: () => void } = $props();
+	const sessionId = $derived(request.mode === 'edit' ? request.sessionId : null);
+	const sessions = live(() => db.session.toArray(), []);
+	const items = live(() => db.work_item.toArray(), []);
+	const types = live(() => db.activity_type.toArray(), []);
+	const setting = live(() => db.setting.get('reporting_tz'), undefined);
+	const zone = $derived(
+		readSetting('reporting_tz', setting.current?.value) ??
+			Intl.DateTimeFormat().resolvedOptions().timeZone,
+	);
+	const session = $derived(
+		sessionId ? sessions.current.find((s) => s.id === sessionId) : undefined,
+	);
+	let activeId = $state<string | null>(null);
+	let itemId = $state<string | null>(null);
+	let typeId = $state(NEW_WORK_ITEM_TYPE_ID);
+	let startValue = $state('');
+	let endValue = $state('');
+	let note = $state('');
+	let itemSearch = $state('');
+	let saved = $state(false);
+	let saveError = $state('');
+	let error = $state('');
+	let warningList = $state<string[]>([]);
+	let ambiguous = $state<string[]>([]);
+	let confirmDelete = $state(false);
+	let busy = $state(false);
+	let saveTimer: ReturnType<typeof setTimeout>;
+
+	$effect(() => {
+		if (request.mode === 'edit' && session && activeId !== session.id) {
+			activeId = session.id;
+			itemId = session.work_item_id;
+			typeId = session.type_id;
+			startValue = toLocalDateTime(session.start_at, zone);
+			endValue = session.end_at === null ? '' : toLocalDateTime(session.end_at, zone);
+			note = session.note;
+			if (request.focus === 'note')
+				queueMicrotask(() =>
+					document.querySelector<HTMLTextAreaElement>('.editor textarea')?.focus(),
+				);
+		} else if (request.mode === 'new' && activeId !== 'new') {
+			activeId = 'new';
+			itemId = request.prefill.work_item_id ?? null;
+			typeId = items.current.find((item) => item.id === itemId)?.type_id ?? NEW_WORK_ITEM_TYPE_ID;
+			startValue =
+				request.prefill.start_at === undefined
+					? ''
+					: toLocalDateTime(request.prefill.start_at, zone);
+			endValue =
+				request.prefill.end_at === undefined ? '' : toLocalDateTime(request.prefill.end_at, zone);
+			note = '';
+		}
+	});
+
+	const visibleItems = $derived(
+		items.current.filter(
+			(item) =>
+				item.deleted_at === null &&
+				item.archived_at === null &&
+				item.name.toLocaleLowerCase().includes(itemSearch.toLocaleLowerCase()),
+		),
+	);
+	const visibleTypes = $derived(
+		types.current
+			.filter(
+				(type) => type.deleted_at === null && (type.archived_at === null || type.id === typeId),
+			)
+			.sort((a, b) => a.sort_key - b.sort_key),
+	);
+	const allowRunning = $derived(
+		request.mode === 'edit' && session !== undefined && session.end_at === null,
+	);
+	const timeCheck = $derived(
+		startValue ? validateSessionTimes(startValue, endValue, zone, allowRunning) : null,
+	);
+	const duration = $derived(
+		timeCheck?.ok ? sessionMinutes(timeCheck.start, timeCheck.end ?? Date.now()) : null,
+	);
+
+	function flashSaved() {
+		saved = true;
+		clearTimeout(saveTimer);
+		saveTimer = setTimeout(() => (saved = false), 1800);
+	}
+	function refreshValidation() {
+		error = timeCheck && !timeCheck.ok ? timeCheck.message : '';
+		ambiguous = timeCheck?.ok
+			? [timeCheck.ambiguousStart ? 'start' : '', timeCheck.ambiguousEnd ? 'end' : ''].filter(
+					Boolean,
+				)
+			: [];
+		warningList = timeCheck?.ok
+			? sessionWarnings(timeCheck.start, timeCheck.end, sessions.current, items.current, sessionId)
+			: [];
+	}
+	function ambiguousHint(field: 'start' | 'end') {
+		const value = field === 'start' ? startValue : endValue;
+		const [hourText, minute] = value.slice(11).split(':');
+		const hour = Number(hourText);
+		const suffix = hour >= 12 ? 'PM' : 'AM';
+		const displayHour = hour % 12 || 12;
+		return `Clocks went back at this time; using the first ${displayHour}:${minute} ${suffix}.`;
+	}
+	async function saveField(field: 'item' | 'type' | 'start' | 'end' | 'note') {
+		if (request.mode !== 'edit' || !session || busy) return;
+		refreshValidation();
+		if (error && (field === 'start' || field === 'end')) return;
+		let changes: Record<string, unknown> = {};
+		if (field === 'item') changes = { work_item_id: itemId };
+		if (field === 'type') changes = { type_id: typeId };
+		if (field === 'note') changes = { note };
+		if (field === 'start' || field === 'end') {
+			if (!timeCheck?.ok) return;
+			changes = {
+				start_at: timeCheck.start,
+				end_at: timeCheck.end,
+				start_tz: zone,
+				end_tz: timeCheck.end === null ? null : zone,
+			};
+		}
+		try {
+			await repo.update('session', session.id, changes);
+			saveError = '';
+			flashSaved();
+		} catch {
+			saveError = 'Could not save this change. It is still here; try again.';
+		}
+	}
+	async function createItem() {
+		const name = itemSearch.trim();
+		if (!name) return;
+		const created = await repo.create('work_item', {
+			name,
+			description: '',
+			type_id: NEW_WORK_ITEM_TYPE_ID,
+			project_id: null,
+			place_id: null,
+			pinned_at: null,
+			pin_sort: 0,
+			archived_at: null,
+		});
+		itemId = created.id;
+		itemSearch = '';
+		if (request.mode === 'edit') await saveField('item');
+	}
+	async function addSession() {
+		refreshValidation();
+		if (!timeCheck?.ok || !startValue || (endValue === '' && request.mode === 'new')) return;
+		busy = true;
+		try {
+			const created = await repo.create('session', {
+				work_item_id: itemId,
+				type_id: typeId,
+				start_at: timeCheck.start,
+				start_tz: zone,
+				end_at: timeCheck.end,
+				end_tz: timeCheck.end === null ? null : zone,
+				note,
+				source: 'manual',
+				place_id: null,
+				place_state: 'none',
+				place_candidates: [],
+				flags: {},
+				origin_device_id: await repo.deviceId(),
+			});
+			void created;
+			onclose();
+		} catch {
+			error = 'Could not add this session. Your entry is still here; try again.';
+		} finally {
+			busy = false;
+		}
+	}
+	async function deleteSession() {
+		if (!session) return;
+		const undo = await repo.remove('session', session.id);
+		onclose();
+		showToast({ message: 'Session deleted', undo: () => repo.undo(undo) });
+	}
+	$effect(() => {
+		if (request.mode !== 'edit' || !session) return;
+		const editorSessionId = session.id;
+		if (!editorSessionId) return;
+		let textarea: HTMLTextAreaElement | null = null;
+		const save = () => void saveField('note');
+		const attach = () => {
+			textarea = document.querySelector('.editor textarea');
+			if (!textarea) return;
+			textarea.addEventListener('blur', save);
+			observer.disconnect();
+		};
+		const observer = new MutationObserver(attach);
+		observer.observe(document.body, { childList: true, subtree: true });
+		queueMicrotask(attach);
+		return () => {
+			observer.disconnect();
+			textarea?.removeEventListener('blur', save);
+		};
+	});
+</script>
+
+{#if request.mode === 'edit' && !session}
+	<p>This session is unavailable.</p>
+{:else}
+	<div class="editor">
+		<Field label="Work item">
+			{#snippet children(props)}<TextInput
+					{...props}
+					bind:value={itemSearch}
+					placeholder={itemId
+						? (items.current.find((item) => item.id === itemId)?.name ?? 'Untitled session')
+						: 'Untitled session'}
+				/>{/snippet}
+		</Field>
+		<div class="item-actions">
+			<select
+				aria-label="Choose work item"
+				value={itemId ?? ''}
+				onchange={(event) => {
+					itemId = event.currentTarget.value || null;
+					void saveField('item');
+				}}
+			>
+				<option value="">Untitled session</option>
+				{#each visibleItems as item (item.id)}<option value={item.id}>{item.name}</option>{/each}
+			</select>
+			{#if itemSearch.trim()}<Button variant="secondary" onclick={() => void createItem()}
+					>Create “{itemSearch.trim()}”</Button
+				>{/if}
+		</div>
+		<Field label="Activity type">
+			{#snippet children(props)}<select
+					{...props}
+					bind:value={typeId}
+					onchange={() => void saveField('type')}
+					>{#each visibleTypes as type (type.id)}<option value={type.id}
+							>{type.name}{type.archived_at !== null ? ' (archived)' : ''}</option
+						>{/each}</select
+				>{/snippet}
+		</Field>
+		<Field
+			label="Start"
+			error={error && timeCheck && !timeCheck.ok && timeCheck.field === 'start' ? error : undefined}
+			hint={ambiguous.includes('start') ? ambiguousHint('start') : undefined}
+		>
+			{#snippet children(props)}<input
+					{...props}
+					type="datetime-local"
+					bind:value={startValue}
+					onblur={() => void saveField('start')}
+					oninput={refreshValidation}
+				/>{/snippet}
+		</Field>
+		<Field
+			label="End"
+			error={error && timeCheck && !timeCheck.ok && timeCheck.field === 'end' ? error : undefined}
+			hint={ambiguous.includes('end')
+				? ambiguousHint('end')
+				: endValue === '' && request.mode === 'edit' && session?.end_at === null
+					? 'Still running'
+					: undefined}
+		>
+			{#snippet children(props)}<input
+					{...props}
+					type="datetime-local"
+					bind:value={endValue}
+					onblur={() => void saveField('end')}
+					oninput={refreshValidation}
+				/>{/snippet}
+		</Field>
+		<p class="duration">
+			Duration: {duration === null ? '—' : formatMinutes(duration)}
+		</p>
+		<Field label="Note" id="session-note">
+			{#snippet children(props)}<div>
+					<TextArea {...props} bind:value={note} rows={3} placeholder="Add a note" />
+				</div>{/snippet}
+		</Field>
+		{#if saved}<p class="saved" role="status">Saved</p>{/if}
+		{#if saveError}<p class="error" role="alert">{saveError}</p>{/if}
+		{#each warningList as warning (warning)}<Banner tone="caution" message={warning} />{/each}
+		{#if request.mode === 'new'}<Button
+				wide
+				disabled={!timeCheck?.ok || !startValue || !endValue}
+				{busy}
+				onclick={() => void addSession()}>Add session</Button
+			>
+		{:else}<div class="delete-row">
+				<Button variant="danger" onclick={() => (confirmDelete = true)}>Delete session</Button>
+			</div>{/if}
+	</div>
+{/if}
+<ConfirmDialog
+	bind:open={confirmDelete}
+	title="Delete this session?"
+	message="This session will be deleted."
+	confirmLabel="Delete session"
+	danger
+	onconfirm={deleteSession}
+/>
+
+<style>
+	.editor {
+		display: grid;
+		gap: var(--ht-space-4);
+	}
+
+	.editor :global(select),
+	.editor :global(input[type='datetime-local']) {
+		width: 100%;
+		min-height: var(--ht-control-height);
+		border: var(--ht-hairline) solid var(--ht-line-strong);
+		border-radius: var(--ht-radius-control);
+		padding: var(--ht-space-2) var(--ht-space-3);
+		background: var(--ht-surface);
+		color: var(--ht-ink);
+		font: var(--ht-type-body);
+	}
+
+	.item-actions {
+		display: grid;
+		gap: var(--ht-space-2);
+	}
+
+	.duration,
+	.saved,
+	.error {
+		font: var(--ht-type-label);
+		color: var(--ht-ink-2);
+	}
+
+	.error {
+		color: var(--ht-danger);
+	}
+
+	.saved {
+		color: var(--ht-ink-2);
+	}
+
+	.delete-row {
+		display: flex;
+		justify-content: flex-end;
+	}
+</style>

@@ -1,4 +1,18 @@
 <script lang="ts">
-	// Placeholder until task 1.6: renders the session editor (Sheet on phones,
-	// right pane on desktop History) for sessionEditor.request.
+	import { sessionEditor } from './editor.svelte';
+	import Sheet from '$lib/components/Sheet.svelte';
+	import SessionEditor from './SessionEditor.svelte';
+	const request = $derived(sessionEditor.request);
 </script>
+
+{#if request}
+	<Sheet
+		open={true}
+		title={request.mode === 'new' ? 'Add session' : 'Edit session'}
+		onclose={() => sessionEditor.close()}
+	>
+		{#key request}
+			<SessionEditor {request} onclose={() => sessionEditor.close()} />
+		{/key}
+	</Sheet>
+{/if}
