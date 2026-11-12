@@ -126,6 +126,7 @@ mutation = { id, entity, record_id, kind: "put" | "patch" | "delete" | "undelete
 2. **delete** sets `deleted_at`. A **patch** arriving for a deleted record is applied and undeletes it, with a conflict record noting the restoration.
 3. **put** on an existing id is treated as a patch of the differing fields, except in a `mode: "restore"` batch, where it overwrites.
 4. The server clamps `at` to at most five minutes ahead of its own clock.
+5. Applying the same mutation twice leaves the record unchanged the second time. Conflict ids are deterministic (`conflictId(mutation.id, field)`, a UUIDv8 from a pure hash), so a re-applied losing mutation re-emits the same conflict record rather than a duplicate. Batch retries are deduplicated by `batch_id` on the server. Every synced record carries `updated_by` (the device of the last write) so a conflict can name both devices. (Decided 2026-11-12, task 1.2a.)
 
 ### Server
 
