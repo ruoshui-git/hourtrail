@@ -37,7 +37,11 @@ on_deadline() {
 	exit 124
 }
 trap on_deadline TERM
-trap 'kill "$sentinel" 2>/dev/null || true; pkill -P "$sentinel" 2>/dev/null || true' EXIT
+reap() { # stop servers left in the task worktree (never the main checkout: verify .)
+	[[ $name != . ]] && "$repo/scripts/agent/lib/reap-strays" "$dir"
+	return 0
+}
+trap 'kill "$sentinel" 2>/dev/null || true; pkill -P "$sentinel" 2>/dev/null || true; reap' EXIT
 step() { # step LABEL LIMIT_SECONDS COMMAND...
 	local label=$1 secs=$2
 	shift 2

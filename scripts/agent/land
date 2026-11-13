@@ -68,6 +68,7 @@ current=merge
 git -C "$repo" merge -q --ff-only "task/$name"
 current=push
 timeout 120 git -C "$repo" push -q || { echo "land: push failed or timed out; main is merged locally, push it by hand" >&2; exit 1; }
+"$repo/scripts/agent/lib/reap-strays" "$wt" || true # orphaned E2E servers
 git -C "$repo" worktree remove --force "$wt"
 git -C "$repo" branch -q -D "task/$name"
 echo "land: $name merged at $(git -C "$repo" rev-parse --short HEAD)"

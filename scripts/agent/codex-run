@@ -145,6 +145,8 @@ finish() { # finish CODE REASON
 		kill_tree_hard "$cpid"
 	fi
 	kill_tree "$sentinel"
+	# Servers that Playwright started and that were orphaned to init escape kill_tree.
+	[[ -n ${wt:-} && -d $wt ]] && { "$repo/scripts/agent/lib/reap-strays" "$wt" >>"$run/stderr.log" 2>&1 || true; }
 	echo "$code" >"$run/exit"
 	echo "$reason" >"$run/exit-reason"
 	echo "codex-run: $reason" >>"$run/stderr.log"

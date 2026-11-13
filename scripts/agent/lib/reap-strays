@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# reap-strays DIR [--dry-run]
+# TERM, then KILL, every process whose working directory is DIR or below it (also when DIR
+# has been deleted), except this script and its ancestors. Prints each process it stops.
+#
+# Why: E2E and screenshot runs start servers (wrangler dev, workerd, vite preview) through
+# Playwright. When Playwright or the runner is killed hard, those servers are reparented to
+# init, so killing the process tree misses them. They keep their ports (VS Code then forwards
+# each one) and, because the configs use reuseExistingServer, a later run on the same port
+# silently tests the stale server's old build. Called by codex-run, verify and land.
+set -uo pipefail
+
+dir=$(realpath -m "${1:?usage: reap-strays DIR [--dry-run]}")
+dry=${2:-}
+[[ $dir == / || $dir == "$HOME" ]] && {
+	echo "reap-strays: refusing to reap $dir" >&2
+	exit 2
+}
+
+skip=" "
+p=$$
+while [[ -n $p && $p -gt 1 ]]; do
+	skip+="$p "
+	p=$(ps -o ppid= -p "$p" 2>/dev/null | tr -d ' ')
+done
+
+pids=()
+for d in /proc/[0-9]*; do
+	pid=${d#/proc/}
+	[[ $skip == *" $pid "* ]] && continue
+	cwd=$(readlink "$d/cwd" 2>/dev/null) || continue
+	cwd=${cwd% (deleted)}
+	[[ $cwd == "$dir" || $cwd == "$dir"/* ]] || continue
+	pids+=("$pid")
+done
+((${#pids[@]})) || exit 0
+
+for pid in "${pids[@]}"; do
+	echo "reap-strays: ${dry:+would stop }$pid $(tr '\0' ' ' <"/proc/$pid/cmdline" 2>/dev/null | cut -c1-120)"
+done
+[[ $dry == --dry-run ]] && exit 0
+kill -TERM "${pids[@]}" 2>/dev/null
+for _ in 1 2 3 4 5; do
+	alive=()
+	for pid in "${pids[@]}"; do kill -0 "$pid" 2>/dev/null && alive+=("$pid"); done
+	((${#alive[@]})) || exit 0
+	sleep 1
+done
+kill -KILL "${alive[@]}" 2>/dev/null
+exit 0
