@@ -14,6 +14,8 @@
     "run_worker_first": ["/api/*"],
   },
   "observability": { "enabled": true },
+  "triggers": { "crons": ["*/5 * * * *"] },
+  "vars": { "APP_ORIGIN": "https://hourtrail-staging.ruoshuim.workers.dev" },
   // Local dev and tests use a local SQLite copy of this binding.
   "d1_databases": [
     {
@@ -26,6 +28,8 @@
   "env": {
     "staging": {
       "name": "hourtrail-staging",
+      "triggers": { "crons": ["*/5 * * * *"] },
+      "vars": { "APP_ORIGIN": "https://hourtrail-staging.ruoshuim.workers.dev" },
       "d1_databases": [
         {
           "binding": "DB",
@@ -37,6 +41,8 @@
     },
     "production": {
       "name": "hourtrail",
+      "triggers": { "crons": ["*/5 * * * *"] },
+      "vars": { "APP_ORIGIN": "https://hourtrail.ruoshuim.workers.dev" },
       "d1_databases": [
         {
           "binding": "DB",

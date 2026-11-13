@@ -7,6 +7,7 @@ import { account } from './routes/account';
 import { backup } from './routes/backup';
 import { health } from './routes/health';
 import { sync } from './routes/sync';
+import { push } from './routes/push';
 
 export function createApp(): Hono<AppEnv> {
 	const app = new Hono<AppEnv>();
@@ -17,6 +18,7 @@ export function createApp(): Hono<AppEnv> {
 	app.route('/api/account', account);
 	app.route('/api/backup', backup);
 	app.route('/api/sync', sync);
+	app.route('/api/push', push);
 	app.notFound((c) => {
 		// Ask Hono's router so parameters and nested route groups follow the same
 		// matching rules as normal dispatch. Middleware alone does not define a path.
