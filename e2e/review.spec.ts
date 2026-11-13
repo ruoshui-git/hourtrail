@@ -15,6 +15,8 @@ async function closeInstallHint(page: Page) {
 test('Home review row opens a day review and fixes, marks, conflicts, and finishes it', async ({
 	page,
 }) => {
+	// Pin the clock so "yesterday" and its gaps do not depend on when the suite runs.
+	await page.clock.install({ time: new Date('2026-11-12T20:00:00-05:00') });
 	await seed(page, 'idle');
 	await page.evaluate(async () => {
 		const request = indexedDB.open('hourtrail');

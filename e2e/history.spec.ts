@@ -3,6 +3,9 @@ import { expect, test } from '@playwright/test';
 test('History navigates days, shows gaps, opens sessions, and splits midnight sessions', async ({
 	page,
 }) => {
+	// Pin the clock to an evening: the headings below are for Thursday, November 12, and
+	// at 20:00 the idle fixture has no midnight crossing of its own (only the one moved below).
+	await page.clock.install({ time: new Date('2026-11-12T20:00:00-05:00') });
 	await page.goto('/dev/seed?scenario=idle');
 	await page.waitForURL('**/dev/seed**');
 	await expect(page.locator('[data-seed-status]')).toHaveText('Seeded idle');
