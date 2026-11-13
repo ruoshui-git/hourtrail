@@ -12,7 +12,7 @@
 // To pause on purpose (waiting on the owner), write the reason to .agent-runs/PAUSE;
 // delete it when work resumes.
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readlinkSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -39,15 +39,27 @@ try {
 }
 if (inFlight > 0) process.exit(0);
 
-let busy = '';
+// Scripts are usually launched by relative path (`bash scripts/agent/verify`), so match the
+// name anywhere and keep only processes whose working directory is this repo or a worktree.
+let pids = [];
 try {
-	busy = execFileSync(
+	pids = execFileSync(
 		'pgrep',
-		['-af', `${repo}/scripts/(agent/(codex-run|verify|land|watch-runs)|heavy)`],
+		['-f', 'scripts/(agent/(codex-run|verify|land|watch-runs)|heavy)( |$)'],
 		{ encoding: 'utf8' },
-	).trim();
+	)
+		.split('\n')
+		.filter(Boolean);
 } catch {}
-if (busy) process.exit(0);
+const inRepo = (pid) => {
+	try {
+		const cwd = readlinkSync(`/proc/${pid}/cwd`);
+		return cwd === repo || cwd.startsWith(`${repo}/`);
+	} catch {
+		return false;
+	}
+};
+if (pids.some(inRepo)) process.exit(0);
 
 const progress = readFileSync(join(repo, 'docs/PROGRESS.md'), 'utf8');
 const todo = progress
