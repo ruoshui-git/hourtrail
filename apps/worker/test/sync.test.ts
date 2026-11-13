@@ -213,6 +213,22 @@ describe('sync push, pull and validation', () => {
 		expect(await snapshot()).toEqual([]);
 		expect(await env.DB.prepare('SELECT COUNT(*) AS n FROM sync_batches').first('n')).toBe(0);
 	});
+	it('rejects a batch containing one malformed mutation, writing none of it', async () => {
+		const good = put();
+		const badPut = { ...put(), value: { ...session(), note: 42 } } as unknown as Mutation;
+		const badPatch = patch(newId(now), 'original', 'A');
+		badPatch.fields = { id: { from: 'x', to: 'y' } };
+		const badRecordId = { ...put(), record_id: newId(now) } as Mutation;
+		for (const bad of [badPut, badPatch, badRecordId]) {
+			await expectError(
+				await request('sync/push', 'POST', batch([good, bad]), cookieA),
+				400,
+				'invalid_request',
+			);
+		}
+		expect(await snapshot()).toEqual([]);
+		expect(await env.DB.prepare('SELECT COUNT(*) AS n FROM sync_batches').first('n')).toBe(0);
+	});
 	it('reports the wall time of a maximum-size batch', async () => {
 		const input = batch(Array.from({ length: 50 }, () => put(session('库存管理系统开发'))));
 		const counted = proxiedDB();

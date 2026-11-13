@@ -5,7 +5,13 @@ import type { Mutation } from './mutation';
 import { equal, managedFields, MutationError, recordValue } from './validation';
 
 export type AnyRecord = RecordOf<Entity>;
-export type ApplyContext = { now: number; rev?: number; mode?: 'restore' };
+/**
+ * `validated: true` is the caller's assertion that the mutation came out of
+ * `mutationSchema` (or `batchSchema`) and that a non-null `current` was read from
+ * storage this module wrote. Those re-parses are then skipped; the id check on
+ * `current` and every other rule still run. Without it, the input is checked in full.
+ */
+export type ApplyContext = { now: number; rev?: number; mode?: 'restore'; validated?: true };
 export type ApplyResult = {
 	next: AnyRecord | null;
 	conflicts: RecordOf<'conflict'>[];
@@ -43,12 +49,12 @@ export function applyMutation(
 	m: Mutation,
 	ctx: ApplyContext,
 ): ApplyResult {
-	m = checkedMutation(m);
+	if (!ctx.validated) m = checkedMutation(m);
 	const at = clampAt(m.at, ctx.now);
 	if (ctx.rev !== undefined && (!Number.isSafeInteger(ctx.rev) || ctx.rev < 0))
 		throw new MutationError('Revision must be a nonnegative integer');
 	if (current !== null) {
-		recordValue(m.entity, current);
+		if (!ctx.validated) recordValue(m.entity, current);
 		if (current.id !== m.record_id) throw new MutationError('Current record id mismatch');
 	}
 	const conflicts: RecordOf<'conflict'>[] = [];

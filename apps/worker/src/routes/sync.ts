@@ -101,7 +101,9 @@ sync.post('/push', requireDevice, async (c) => {
 				const result = applyMutation(
 					current.get(key(mutation.entity, mutation.record_id)) ?? null,
 					mutation,
-					{ now, rev: seq, mode: batch.mode },
+					// Mutations came from batchSchema and records from D1 (written by this
+					// path), so applyMutation skips the duplicate re-parse.
+					{ now, rev: seq, mode: batch.mode, validated: true },
 				);
 				if (result.changed && result.next) store(mutation.entity, result.next);
 				for (const conflict of result.conflicts) store('conflict', conflict);
