@@ -1,6 +1,7 @@
 /// <reference lib="webworker" />
 import { build, files, version } from '$service-worker';
 import { fetchRoute } from '$lib/pwa/routing';
+import { registerReminderHandlers } from '$lib/features/reminders/domain';
 
 const CACHE = `hourtrail-${version}`;
 const SHELL = '/';
@@ -40,4 +41,4 @@ self.addEventListener('fetch', (event) => {
 	);
 });
 
-// Task 4.5 adds push and notificationclick handlers here.
+registerReminderHandlers(self);

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
+	import { goto } from '$app/navigation';
 	import {
 		dayBounds,
 		dayOf,
@@ -41,6 +42,10 @@
 	import { captureFor } from '$lib/features/location/capture';
 	import { promptChoice } from '$lib/features/location/domain';
 	import { clockOffsetMinutes, observeClock, setClockOffset } from '$lib/features/clock/clock';
+	import { page } from '$app/state';
+	import { parseLocalDateTime, toLocalDateTime } from '@hourtrail/core';
+	import { defaultReminderEnd, shouldPromptReminder } from '$lib/features/reminders/domain';
+	import DateTimeInput from '$lib/components/DateTimeInput.svelte';
 
 	type Session = RecordOf<'session'>;
 	type WorkItem = RecordOf<'work_item'>;
@@ -128,6 +133,12 @@
 	let persistenceAsked = $state(false);
 	let placeSheet = $state<'name' | 'choose' | null>(null);
 	let newPlaceName = $state('');
+	let reminderSessionId = $state<string | null>(null);
+	let stopAtOpen = $state(false);
+	let reminderEndValue = $state('');
+	let reminderError = $state('');
+	let reminderThresholdMin = $state(240);
+	let prompted = $state(false);
 	const currentDay = $derived(dayOf(now, today.current.reportingZone));
 	const clockCaution = $derived(clockOffsetMinutes(today.current.clockOffsetMs));
 	const pendingKeys = $derived(
@@ -198,6 +209,15 @@
 		),
 	);
 	const current = $derived(running.current.at(-1) ?? null);
+	const reminderSession = $derived(
+		allSessions.find((s) => s.id === reminderSessionId && s.end_at === null) ?? null,
+	);
+	const reminderName = $derived(
+		reminderSession
+			? (allItems.find((item) => item.id === reminderSession.work_item_id)?.name ??
+					'Untitled session')
+			: '',
+	);
 	const currentItem = $derived(
 		current ? (allItems.find((item) => item.id === current.work_item_id) ?? undefined) : undefined,
 	);
@@ -288,6 +308,77 @@
 			window.removeEventListener('pageshow', refresh);
 		};
 	});
+	$effect(() => {
+		const checkId = page.url.searchParams.get('check');
+		if (checkId) {
+			void db.setting.get('reminder').then((row) => {
+				reminderThresholdMin = readSetting('reminder', row?.value).threshold_min;
+			});
+			reminderSessionId = checkId;
+			void gotoRemoveCheck();
+			return;
+		}
+		if (prompted || !today.current.sessions.length) return;
+		const settingRow = today.current.sessions.length
+			? db.setting.get('reminder')
+			: Promise.resolve(undefined);
+		void settingRow.then(async (row) => {
+			const setting = readSetting('reminder', row?.value);
+			reminderThresholdMin = setting.threshold_min;
+			for (const session of running.current) {
+				const type = today.current.types.find((entry) => entry.id === session.type_id);
+				const dismissed = await db.local.get(`reminder_dismiss:${session.id}` as never);
+				if (
+					shouldPromptReminder({
+						session,
+						setting,
+						typeReminds: type?.remind === true,
+						dismissedAt: typeof dismissed?.value === 'number' ? dismissed.value : null,
+						now,
+					})
+				) {
+					reminderSessionId = session.id;
+					prompted = true;
+					return;
+				}
+			}
+		});
+	});
+	async function gotoRemoveCheck() {
+		await goto(resolve('/'), { replaceState: true, keepFocus: true });
+	}
+	async function keepReminderRunning() {
+		if (reminderSessionId)
+			await db.local.put({
+				key: `reminder_dismiss:${reminderSessionId}` as never,
+				value: Date.now(),
+			});
+		reminderSessionId = null;
+	}
+	async function stopReminderNow() {
+		if (!reminderSessionId) return;
+		await repo.update('session', reminderSessionId, {
+			end_at: Date.now(),
+			end_tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
+		});
+		reminderSessionId = null;
+	}
+	async function stopReminderAt() {
+		if (!reminderSession) return;
+		const parsed = parseLocalDateTime(
+			reminderEndValue,
+			Intl.DateTimeFormat().resolvedOptions().timeZone,
+		);
+		if (!parsed.ok || parsed.instant < reminderSession.start_at || parsed.instant > now) {
+			reminderError = 'Choose a time between the session start and now.';
+			return;
+		}
+		await repo.update('session', reminderSession.id, {
+			end_at: parsed.instant,
+			end_tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
+		});
+		reminderSessionId = null;
+	}
 
 	async function resolvePlace(placeId: string | null, state: 'set' | 'dismissed' = 'set') {
 		if (!placePromptSession) return;
@@ -743,6 +834,46 @@
 			{/each}
 		{/if}
 		<Button variant="secondary" {busy} onclick={() => startItem(null)}>Untitled session</Button>
+	{/if}
+</Sheet>
+
+<Sheet
+	open={reminderSessionId !== null}
+	title="Still working?"
+	onclose={() => (reminderSessionId = null)}
+>
+	{#if reminderSession}
+		<p>
+			{reminderName} has been running since {formatClock(reminderSession.start_at)} ({duration(
+				Math.round((now - reminderSession.start_at) / 60_000),
+			)}).
+		</p>
+		{#if stopAtOpen}
+			<Field label="End time" error={reminderError}
+				>{#snippet children(props)}<DateTimeInput
+						{...props}
+						bind:value={reminderEndValue}
+						min={toLocalDateTime(
+							reminderSession.start_at,
+							Intl.DateTimeFormat().resolvedOptions().timeZone,
+						)}
+						max={toLocalDateTime(now, Intl.DateTimeFormat().resolvedOptions().timeZone)}
+					/>{/snippet}</Field
+			>
+			<Button onclick={stopReminderAt}>Stop at…</Button>
+		{:else}<Button
+				variant="secondary"
+				onclick={() => {
+					reminderError = '';
+					stopAtOpen = true;
+					reminderEndValue = toLocalDateTime(
+						defaultReminderEnd(reminderSession.start_at, reminderThresholdMin, now),
+						Intl.DateTimeFormat().resolvedOptions().timeZone,
+					);
+				}}>Stop at…</Button
+			>{/if}
+		<Button onclick={stopReminderNow}>Stop now</Button>
+		<Button variant="quiet" onclick={keepReminderRunning}>Keep running</Button>
 	{/if}
 </Sheet>
 

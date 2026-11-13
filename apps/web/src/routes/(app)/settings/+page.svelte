@@ -71,6 +71,14 @@
 			>
 				<span>{section}</span><ChevronRight aria-hidden="true" />
 			</a>
+		{:else if section === 'Reminders'}
+			<a
+				class="row"
+				href={resolve('/settings/reminders')}
+				aria-current={active === 'reminders' ? 'page' : undefined}
+			>
+				<span>{section}</span><ChevronRight aria-hidden="true" />
+			</a>
 		{:else}
 			<div class="row unavailable"><span>{section}</span><span>Coming soon</span></div>
 		{/if}
