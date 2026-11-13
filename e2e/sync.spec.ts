@@ -7,6 +7,7 @@ import {
 	seedSessions,
 	signIn,
 } from './helpers/sync';
+import { acquireCloud, releaseCloud } from './helpers/auth';
 
 test.use({ actionTimeout: 15_000 });
 
@@ -20,6 +21,7 @@ test('syncs edits across devices, retries a processed batch, and uploads offline
 		browserName !== 'chromium',
 		'Signed-in sync steps require Chromium Secure-cookie support on http://127.0.0.1.',
 	);
+	await acquireCloud();
 	const suffix = Math.random().toString(36).slice(2, 7);
 	const contextA = await browser.newContext({ baseURL, timezoneId: 'America/New_York' });
 	const contextB = await browser.newContext({ baseURL, timezoneId: 'America/New_York' });
@@ -131,6 +133,7 @@ test('syncs edits across devices, retries a processed batch, and uploads offline
 	} finally {
 		await contextA.close();
 		await contextB.close();
+		releaseCloud();
 	}
 });
 
@@ -144,6 +147,7 @@ test('uploads 300 pre-sign-in sessions in persisted batches', async ({
 		browserName !== 'chromium',
 		'Signed-in sync steps require Chromium Secure-cookie support on http://127.0.0.1.',
 	);
+	await acquireCloud();
 	const suffix = Math.random().toString(36).slice(2, 7);
 	const contextA = await browser.newContext({ baseURL, timezoneId: 'America/New_York' });
 	const contextB = await browser.newContext({ baseURL, timezoneId: 'America/New_York' });
@@ -182,5 +186,6 @@ test('uploads 300 pre-sign-in sessions in persisted batches', async ({
 	} finally {
 		await contextA.close();
 		await contextB.close();
+		releaseCloud();
 	}
 });

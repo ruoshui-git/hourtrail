@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
-import { TEST_ACCOUNT_KEY, resetAuthLockout } from './helpers/auth';
+import { TEST_ACCOUNT_KEY, acquireCloud, releaseCloud, resetAuthLockout } from './helpers/auth';
 
 // Fail a stuck action in 15 s rather than letting it consume the 180 s test budget.
 test.use({ actionTimeout: 15_000 });
@@ -18,7 +18,7 @@ test('sign in, link and revoke devices, preserve local recording, and sign out',
 		browserName !== 'chromium',
 		'Signed-in cloud steps require Chromium Secure-cookie support on http://127.0.0.1.',
 	);
-	await resetAuthLockout();
+	await acquireCloud();
 	// The local D1 can hold devices from earlier runs (a reused server, retries), so names that
 	// assertions look up must be unique to this run.
 	const run = Math.random().toString(36).slice(2, 6);
@@ -168,6 +168,7 @@ test('sign in, link and revoke devices, preserve local recording, and sign out',
 		await contextA.close();
 		await contextB.close();
 		await contextC.close();
+		releaseCloud();
 	}
 });
 
