@@ -281,9 +281,6 @@ importers:
       '@hourtrail/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@pushforge/builder':
-        specifier: 2.0.5
-        version: 2.0.5
       hono:
         specifier: 4.13.18
         version: 4.13.18
@@ -914,11 +911,6 @@ packages:
 
   '@poppinss/exception@1.2.3':
     resolution: {integrity: sha512-dCED+QRChTVatE9ibtoaxc+WkdzOSjYTKi/+uacHWIsfodVfpsueo3+DKpgU5Px8qXjgmXkSvhXvSCz3fnP9lw==}
-
-  '@pushforge/builder@2.0.5':
-    resolution: {integrity: sha512-9Q6lBFWUMKUL5vBknwAt+nlS7eWCrNuf1lCMAhC1Iypn8gtYJ0rdVHAnsGFMxPKhbtgkgpU3r6UVduDTQ8jgzw==}
-    engines: {node: '>=20.0.0'}
-    hasBin: true
 
   '@rolldown/binding-android-arm-eabi@1.2.19':
     resolution: {integrity: sha512-e+Ebe0WT+9tbXmNKPIiC8YrWAHYwug3m6i4p3rZGGulfZri1jtI4HslT+OZnFf/OIHowWF71DTlHwXBP2SiA7A==}
@@ -2765,8 +2757,6 @@ snapshots:
       supports-color: 10.2.2
 
   '@poppinss/exception@1.2.3': {}
-
-  '@pushforge/builder@2.0.5': {}
 
   '@rolldown/binding-android-arm-eabi@1.2.19':
     optional: true
