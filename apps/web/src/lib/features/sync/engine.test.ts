@@ -1,6 +1,7 @@
 import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildBackup, MAX_BATCH, newId } from '@hourtrail/core';
+import { PUSH_BATCH } from './engine.svelte';
 import type { RecordOf } from '@hourtrail/core';
 import { ApiError, OfflineError } from '$lib/api/client';
 import { createRepo } from '$lib/db/repo';
@@ -23,7 +24,10 @@ const waitFor = async (predicate: () => Promise<boolean>) => {
 	throw new Error('Timed out waiting for sync state.');
 };
 
-function fixture(request: (path: string, options: RequestOptions) => Promise<unknown>) {
+function fixture(
+	request: (path: string, options: RequestOptions) => Promise<unknown>,
+	batchSize?: number,
+) {
 	const database = openDb(`sync-${newId()}`);
 	databases.push(database);
 	const repository = createRepo(database, () => 1000);
@@ -34,6 +38,7 @@ function fixture(request: (path: string, options: RequestOptions) => Promise<unk
 		request: request as never,
 		clock: () => 1000,
 		id: () => newId(1000),
+		...(batchSize === undefined ? {} : { batchSize }),
 	});
 	return { database, repository, engine };
 }
@@ -264,7 +269,7 @@ it('separates consecutive modes, respects MAX_BATCH and resends a restore batch 
 			};
 		}
 		return { records: [], next_since: 0, more: false, server_time: 1000 };
-	});
+	}, MAX_BATCH);
 	await database.local.put({ key: 'device_id', value: 'device' });
 	for (let i = 0; i < MAX_BATCH + 2; i++)
 		await repository.create('project', { name: `${i}`, archived_at: null });
@@ -360,4 +365,55 @@ it('replays pending restore rows with their modes over a pull arriving during a 
 	} finally {
 		engine.stop();
 	}
+});
+
+it('sends new batches of PUSH_BATCH by default', async () => {
+	const sizes: number[] = [];
+	const { database, repository, engine } = fixture(async (path, options) => {
+		if (path === '/api/sync/push') {
+			sizes.push(options.body!.mutations.length);
+			return {
+				batch_id: options.body!.batch_id,
+				seq: sizes.length,
+				applied: options.body!.mutations.length,
+				rejected: [],
+				server_time: 1000,
+			};
+		}
+		return { records: [], next_since: 0, more: false, server_time: 1000 };
+	});
+	await database.local.put({ key: 'device_id', value: 'device' });
+	for (let i = 0; i < PUSH_BATCH * 2 + 3; i++)
+		await repository.create('project', { name: `${i}`, archived_at: null });
+	engine.start();
+	await waitFor(async () => engine.status === 'synced' && (await database.outbox.count()) === 0);
+	expect(PUSH_BATCH).toBeLessThan(MAX_BATCH);
+	expect(sizes).toEqual([PUSH_BATCH, PUSH_BATCH, 3]);
+});
+
+it('resends an already-assigned batch larger than PUSH_BATCH whole', async () => {
+	const sent: { batch_id: string; count: number }[] = [];
+	const { database, repository, engine } = fixture(async (path, options) => {
+		if (path === '/api/sync/push') {
+			sent.push({ batch_id: options.body!.batch_id, count: options.body!.mutations.length });
+			return {
+				batch_id: options.body!.batch_id,
+				seq: sent.length,
+				applied: options.body!.mutations.length,
+				rejected: [],
+				server_time: 1000,
+			};
+		}
+		return { records: [], next_since: 0, more: false, server_time: 1000 };
+	});
+	await database.local.put({ key: 'device_id', value: 'device' });
+	for (let i = 0; i < MAX_BATCH; i++)
+		await repository.create('project', { name: `${i}`, archived_at: null });
+	// An older version assigned all 50 rows to one batch before it could send it.
+	const legacy = newId(2000);
+	for (const row of await database.outbox.toArray())
+		await database.outbox.update(row.seq, { batch_id: legacy });
+	engine.start();
+	await waitFor(async () => engine.status === 'synced' && (await database.outbox.count()) === 0);
+	expect(sent[0]).toEqual({ batch_id: legacy, count: MAX_BATCH });
 });

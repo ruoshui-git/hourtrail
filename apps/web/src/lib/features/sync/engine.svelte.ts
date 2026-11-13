@@ -30,7 +30,17 @@ type SyncOptions = {
 	request?: typeof apiFetch;
 	clock?: () => number;
 	id?: () => string;
+	batchSize?: number;
 };
+
+/**
+ * Mutations per new push batch. The server accepts up to MAX_BATCH (50), but a full 50-put
+ * batch measured up to 17 ms CPU on staging, over the free plan's 10 ms (2026-11-13), so new
+ * batches are smaller. Batches already assigned (up to MAX_BATCH rows, for example by an older
+ * version) are always resent whole: splitting one would let the server's stored ack for its
+ * batch_id swallow the rows sent second.
+ */
+export const PUSH_BATCH = 25;
 
 const rejectedKey = 'sync_rejected';
 const cursorKey = 'sync_cursor';
@@ -47,6 +57,7 @@ export class SyncEngine {
 	private readonly request: typeof apiFetch;
 	private readonly clock: () => number;
 	private readonly id: () => string;
+	private readonly batchSize: number;
 	private started = false;
 	private inFlight = false;
 	private followUp = false;
@@ -63,6 +74,7 @@ export class SyncEngine {
 		this.request = options.request ?? apiFetch;
 		this.clock = options.clock ?? Date.now;
 		this.id = options.id ?? newId;
+		this.batchSize = Math.min(options.batchSize ?? PUSH_BATCH, MAX_BATCH);
 	}
 
 	start() {
@@ -218,13 +230,15 @@ export class SyncEngine {
 
 	private async nextBatch(): Promise<OutboxRow[]> {
 		return this.database.transaction('rw', this.database.outbox, async () => {
+			// Read up to MAX_BATCH so an already-assigned batch is resent whole.
 			const rows = await this.database.outbox.orderBy('seq').limit(MAX_BATCH).toArray();
 			const first = rows[0];
 			if (!first) return [];
 			if (first.batch_id !== null) return rows.filter((row) => row.batch_id === first.batch_id);
 			const batch = [] as OutboxRow[];
 			for (const row of rows) {
-				if (row.batch_id !== null || row.mode !== first.mode || batch.length >= MAX_BATCH) break;
+				if (row.batch_id !== null || row.mode !== first.mode || batch.length >= this.batchSize)
+					break;
 				batch.push(row);
 			}
 			const batchId = this.id();
