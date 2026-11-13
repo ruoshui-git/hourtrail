@@ -9,6 +9,8 @@
 		dayOf,
 		dayBounds,
 		readSetting,
+		review,
+		openIssueCount,
 		toLocalDateTime,
 		type Day,
 	} from '@hourtrail/core';
@@ -18,6 +20,7 @@
 	import { openNewSession, openSessionEditor } from '$lib/features/session/editor.svelte';
 	import { buildDay } from '$lib/features/history/domain';
 	import { searchSessions } from '$lib/features/search/search';
+	import { formatClock } from '$lib/components/trail';
 	import MatchText from '$lib/features/search/MatchText.svelte';
 	import SearchRows from '$lib/features/search/SearchRows.svelte';
 	import SessionEditor from '$lib/features/session/SessionEditor.svelte';
@@ -32,13 +35,28 @@
 	});
 	const data = live(
 		async () => {
-			const [sessions, items, types, places, setting, outbox] = await Promise.all([
+			const [
+				sessions,
+				items,
+				types,
+				places,
+				setting,
+				outbox,
+				conflicts,
+				marks,
+				longSession,
+				notePrompt,
+			] = await Promise.all([
 				db.session.toArray(),
 				db.work_item.toArray(),
 				db.activity_type.toArray(),
 				db.place.toArray(),
 				db.setting.get('reporting_tz'),
 				db.outbox.toArray(),
+				db.conflict.toArray(),
+				db.review_mark.toArray(),
+				db.setting.get('long_session_min'),
+				db.setting.get('note_prompt'),
 			]);
 			const gap = await db.setting.get('long_gap_min');
 			return {
@@ -49,6 +67,10 @@
 				zone: readSetting('reporting_tz', setting?.value) ?? deviceZone,
 				gap: readSetting('long_gap_min', gap?.value),
 				outbox,
+				conflicts,
+				marks,
+				longSession: readSetting('long_session_min', longSession?.value) ?? 600,
+				notePrompt: readSetting('note_prompt', notePrompt?.value) ?? 'work',
 			};
 		},
 		{
@@ -59,6 +81,10 @@
 			zone: deviceZone,
 			gap: 60,
 			outbox: [],
+			conflicts: [],
+			marks: [],
+			longSession: 600,
+			notePrompt: 'work' as const,
 		},
 	);
 	const projects = live(() => db.project.toArray(), []);
@@ -188,6 +214,26 @@
 		),
 	);
 	const isToday = $derived(selectedDay === today);
+	const dayOpenIssues = $derived(
+		openIssueCount(
+			review(selectedDay, {
+				sessions: data.current.sessions,
+				items: data.current.items,
+				types: data.current.types,
+				places: data.current.places,
+				conflicts: data.current.conflicts,
+				marks: data.current.marks,
+				settings: {
+					long_gap_min: typeof data.current.gap === 'number' ? data.current.gap : 60,
+					long_session_min: data.current.longSession,
+					note_prompt: data.current.notePrompt,
+				},
+				tz: data.current.zone,
+				now,
+				formatTime: (instant) => formatClock(instant),
+			}),
+		),
+	);
 	const shortDuration = formatMinutes;
 	async function selectDay(day: string) {
 		await goto(resolve(day === today ? '/history' : `/history?day=${day}`));
@@ -340,6 +386,12 @@
 						onclick={() => selectDay(addDays(selectedDay, 1))}>Next day</Button
 					>
 				</nav>
+				{#if dayOpenIssues > 0}<Button
+						variant="secondary"
+						size="sm"
+						onclick={() => goto(resolve(`/history/review?day=${selectedDay}`))}
+						>Review {dayOpenIssues}</Button
+					>{/if}
 			</header>
 			{#if data.current.zone !== deviceZone}
 				<Banner message={`Days are shown in ${data.current.zone}.`} />

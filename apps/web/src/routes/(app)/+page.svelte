@@ -1,7 +1,11 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
 	import {
 		dayBounds,
 		dayOf,
+		addDays,
+		openIssueCount,
+		review,
 		readSetting,
 		WORK_TYPE_ID,
 		DEFAULT_ACTIVITY_TYPES,
@@ -45,16 +49,60 @@
 		async () => {
 			const stored = await db.setting.get('reporting_tz');
 			const reportingZone = readSetting('reporting_tz', stored?.value) ?? deviceZone;
-			const [sessions, types, items, places, fixes] = await Promise.all([
+			const [
+				sessions,
+				types,
+				items,
+				places,
+				fixes,
+				gapSetting,
+				longSetting,
+				noteSetting,
+				conflicts,
+				marks,
+				dayReviews,
+			] = await Promise.all([
 				db.session.filter((row) => row.deleted_at === null).toArray(),
 				db.activity_type.filter((row) => row.deleted_at === null).toArray(),
 				db.work_item.filter((row) => row.deleted_at === null).toArray(),
 				db.place.filter((row) => row.deleted_at === null).toArray(),
 				db.local_fix.toArray(),
+				db.setting.get('long_gap_min'),
+				db.setting.get('long_session_min'),
+				db.setting.get('note_prompt'),
+				db.conflict.toArray(),
+				db.review_mark.toArray(),
+				db.day_review.toArray(),
 			]);
-			return { sessions, types, items, places, fixes, reportingZone };
+			return {
+				sessions,
+				types,
+				items,
+				places,
+				fixes,
+				reportingZone,
+				conflicts,
+				marks,
+				dayReviews,
+				longGap: readSetting('long_gap_min', gapSetting?.value) ?? 60,
+				longSession: readSetting('long_session_min', longSetting?.value) ?? 600,
+				notePrompt: readSetting('note_prompt', noteSetting?.value) ?? 'work',
+			};
 		},
-		{ sessions: [], types: [], items: [], places: [], fixes: [], reportingZone: deviceZone },
+		{
+			sessions: [],
+			types: [],
+			items: [],
+			places: [],
+			fixes: [],
+			reportingZone: deviceZone,
+			conflicts: [],
+			marks: [],
+			dayReviews: [],
+			longGap: 60,
+			longSession: 600,
+			notePrompt: 'work' as const,
+		},
 	);
 	const running = live(() => repo.running(), [] as Session[]);
 	const keepBoth = live(
@@ -80,6 +128,30 @@
 	);
 	const totals = $derived(
 		todayTotals(daySessions, today.current.types, currentDay, today.current.reportingZone, now),
+	);
+	const yesterday = $derived(addDays(currentDay, -1));
+	const yesterdayIssues = $derived(
+		review(yesterday, {
+			sessions: allSessions,
+			items: today.current.items,
+			types: today.current.types,
+			places: today.current.places,
+			conflicts: today.current.conflicts,
+			marks: today.current.marks,
+			settings: {
+				long_gap_min: today.current.longGap,
+				long_session_min: today.current.longSession,
+				note_prompt: today.current.notePrompt,
+			},
+			tz: today.current.reportingZone,
+			now,
+			formatTime: (instant) =>
+				new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(instant),
+		}),
+	);
+	const yesterdayOpenIssues = $derived(openIssueCount(yesterdayIssues));
+	const yesterdayReviewFinished = $derived(
+		today.current.dayReviews.some((entry) => entry.id === yesterday),
 	);
 	const allItems = $derived(today.current.items);
 	const pinned = $derived(
@@ -535,6 +607,11 @@
 				onselect={(id) => openSessionEditor(id)}
 			/>
 		</section>
+		{#if yesterdayOpenIssues > 0 && !yesterdayReviewFinished}
+			<a class="review-row" href={resolve(`/history/review?day=${yesterday}`)}
+				>Yesterday: {yesterdayOpenIssues} things to check</a
+			>
+		{/if}
 	</section>
 	<aside class="item-lists">
 		{#if pinned.length}<section>
@@ -675,6 +752,14 @@
 	.status {
 		font: var(--ht-type-body-strong);
 		color: var(--ht-ink-2);
+	}
+
+	.review-row {
+		min-height: var(--ht-target);
+		display: flex;
+		align-items: center;
+		color: var(--ht-ink-2);
+		font: var(--ht-type-label);
 	}
 
 	.home-grid {
