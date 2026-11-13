@@ -46,7 +46,7 @@ Gate 0 status (2026-11-12): automated part passed. Gallery screenshots in all fo
 | 2.4 | Places library: add, edit, radius, merge duplicates, archive                              | Luna medium ∥                   | done (Luna, one finishing round)                           |
 | 2.5 | `core` place matching; capture on Start and Stop; unknown-place prompts; privacy controls | Sol high, then Luna high        | done (2.5a core, 2.5b capture; review fix: Privacy switch) |
 | 2.6 | Search and filters; desktop two-pane History                                              | Luna high                       | done (Luna, one fix round; review: DST test, plural)       |
-| 2.7 | Desktop layout pass across all screens                                                    | Luna medium, your visual review | active (2.7-desktop-pass, Luna medium)                     |
+| 2.7 | Desktop layout pass across all screens                                                    | Luna medium, your visual review | done (Luna)                                                |
 
 **Gate 2:** scenario E with mocked geolocation (sure, suggested, ambiguous, unresolved, low accuracy, denied, timed out) and on the real phone; review flows; Start never waits on GPS (test with a geolocation call that never returns).
 
