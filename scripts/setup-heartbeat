@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+set -euo pipefail
+env_name=''
+dry_run=false
+while (($#)); do
+	case "$1" in
+		--env) shift; env_name=${1:?--env requires staging or production} ;;
+		--dry-run) dry_run=true ;;
+		*) echo "Unknown argument: $1" >&2; exit 2 ;;
+	esac
+	shift
+done
+[[ "$env_name" == staging || "$env_name" == production ]] || { echo 'Usage: setup-heartbeat --env staging|production [--dry-run]' >&2; exit 2; }
+worker_env=$env_name
+repo_secret=BACKUP_HEARTBEAT_SECRET
+if [[ "$env_name" == staging ]]; then repo_secret=BACKUP_HEARTBEAT_SECRET_STAGING; fi
+if $dry_run; then
+	printf 'pnpm exec wrangler secret put BACKUP_HEARTBEAT_SECRET --env %s\n' "$worker_env"
+	printf 'gh secret set %s -R ruoshui-git/hourtrail-backups\n' "$repo_secret"
+	exit 0
+fi
+secret="$(openssl rand -hex 32)"
+printf '%s' "$secret" | pnpm exec wrangler secret put BACKUP_HEARTBEAT_SECRET --env "$worker_env"
+printf '%s' "$secret" | gh secret set "$repo_secret" -R ruoshui-git/hourtrail-backups
+unset secret

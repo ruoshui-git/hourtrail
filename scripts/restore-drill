@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+set -euo pipefail
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+worker="$root/apps/worker"
+run_drill() {
+	local archive=$1 identity=$2 destination=$3 counts_file=$4 actual_file=$5 expected_override=${6:-}
+	age -d -i "$identity" -o "$destination/dump.sql" "$archive"
+	if [[ -n "$expected_override" ]]; then
+		cp "$expected_override" "$counts_file"
+	else
+		node "$root/scripts/lib/backup-drill/count-dump.mjs" "$destination/dump.sql" > "$counts_file"
+	fi
+	(
+		cd "$worker"
+		pnpm exec wrangler d1 execute DB --env production --local --persist-to "$destination/d1" --file "$destination/dump.sql" >/dev/null
+		pnpm exec wrangler d1 execute DB --env production --local --persist-to "$destination/d1" --command "SELECT 'records:' || entity AS key, COUNT(*) AS count FROM records GROUP BY entity UNION ALL SELECT 'devices' AS key, COUNT(*) AS count FROM devices UNION ALL SELECT 'sync_batches' AS key, COUNT(*) AS count FROM sync_batches" --json > "$actual_file"
+	)
+	node "$root/scripts/lib/backup-drill/compare-counts.mjs" "$counts_file" "$actual_file"
+}
+
+if [[ "${1:-}" == --self-test ]]; then
+	tmp="$(mktemp -d)"
+	chmod 700 "$tmp"
+	cleanup() { rm -rf "$tmp"; }
+	trap cleanup EXIT HUP INT TERM
+	(
+		cd "$worker"
+		CI=1 pnpm exec wrangler d1 migrations apply DB --env production --local --persist-to "$tmp/source"
+	)
+	cat > "$tmp/fixture.sql" <<'SQL'
+INSERT INTO records (entity, id, rev, updated_at, deleted_at, data) VALUES
+('activity_type', '019a67c9-8000-7000-8000-000000000101', 1, 1000, NULL, '{"name":"Work"}'),
+('work_item', '019a67c9-8000-7000-8000-000000000102', 1, 1000, NULL, '{"name":"库存管理系统开发"}'),
+('session', '019a67c9-8000-7000-8000-000000000103', 1, 1000, 1001, '{"name":"修复洗手台"}');
+INSERT INTO devices (id, name, token_hash, token_issued_at, created_at, last_seen_at, revoked_at) VALUES ('019a67c9-8000-7000-8000-000000000104', 'Restore drill', 'hash', 1000, 1000, 1000, NULL);
+INSERT INTO sync_batches (seq, batch_id, device_id, received_at, ack) VALUES (1, '019a67c9-8000-7000-8000-000000000105', '019a67c9-8000-7000-8000-000000000104', 1000, '{}');
+SQL
+	(
+		cd "$worker"
+		pnpm exec wrangler d1 execute DB --env production --local --persist-to "$tmp/source" --file "$tmp/fixture.sql" >/dev/null
+	)
+	# Wrangler's pinned export command has no --persist-to option; export the local D1 SQLite copy.
+	node "$root/scripts/lib/backup-drill/export-local-sqlite.mjs" "$tmp/source" "$tmp/dump.sql"
+	test -s "$tmp/dump.sql"
+	age-keygen -o "$tmp/identity" 2> "$tmp/key-info"
+	chmod 600 "$tmp/identity"
+	recipient="$(sed -n 's/^# public key: //p' "$tmp/identity")"
+	age -r "$recipient" -o "$tmp/good.sql.age" "$tmp/dump.sql"
+	mkdir "$tmp/good-run"
+	run_drill "$tmp/good.sql.age" "$tmp/identity" "$tmp/good-run" "$tmp/good-expected.tsv" "$tmp/good-actual.json"
+	printf '%s\n' 'Restore drill success case passed.'
+	cp "$tmp/dump.sql" "$tmp/tampered.sql"
+	node --input-type=module -e 'import { readFileSync, writeFileSync } from "node:fs"; const file=process.argv[1]; const lines=readFileSync(file,"utf8").split("\n"); const index=lines.findIndex((line)=>/^INSERT INTO ["`]?records["`]?/i.test(line)); if(index<0) throw new Error("Could not find records INSERT to tamper"); lines.splice(index,1); writeFileSync(file,lines.join("\n"));' "$tmp/tampered.sql"
+	age -r "$recipient" -o "$tmp/tampered.sql.age" "$tmp/tampered.sql"
+	mkdir "$tmp/bad-run"
+	if run_drill "$tmp/tampered.sql.age" "$tmp/identity" "$tmp/bad-run" "$tmp/bad-expected.tsv" "$tmp/bad-actual.json" "$tmp/good-expected.tsv" > "$tmp/mismatch.log" 2>&1; then
+		cat "$tmp/mismatch.log"
+		echo 'Expected tampered restore to fail, but it succeeded.' >&2
+		exit 1
+	fi
+	if ! grep -q 'Restore count mismatch' "$tmp/mismatch.log"; then cat "$tmp/mismatch.log"; echo 'Tampered dump failed without a clear mismatch message.' >&2; exit 1; fi
+	cat "$tmp/mismatch.log"
+	printf '%s\n' 'Restore drill mismatch case passed.'
+	node --test "$root/ops/hourtrail-backups/prune.test.mjs"
+	if command -v actionlint >/dev/null 2>&1; then
+		actionlint "$root/ops/hourtrail-backups/.github/workflows/nightly.yml"
+	else
+		python3 -c 'import sys, yaml; yaml.safe_load(open(sys.argv[1], encoding="utf-8"))' "$root/ops/hourtrail-backups/.github/workflows/nightly.yml"
+	fi
+	exit 0
+fi
+[[ $# -ge 1 && "${2:-}" == --identity && -n "${3:-}" ]] || { echo 'Usage: restore-drill <dump.sql.age> --identity <key file>' >&2; exit 2; }
+archive=$1
+identity=$3
+tmp="$(mktemp -d)"
+chmod 700 "$tmp"
+cleanup() { rm -rf "$tmp"; }
+trap cleanup EXIT HUP INT TERM
+run_drill "$archive" "$identity" "$tmp" "$tmp/expected.tsv" "$tmp/actual.json"

@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+set -euo pipefail
+repo=ruoshui-git/hourtrail-backups
+staging=false
+save=''
+while (($#)); do
+	case "$1" in
+		--staging) staging=true ;;
+		--save) shift; save=${1:?--save requires a path} ;;
+		*) echo "Unknown argument: $1" >&2; exit 2 ;;
+	esac
+	shift
+done
+if $staging; then
+	[[ -n "$save" ]] || { echo '--staging requires --save FILE' >&2; exit 2; }
+else
+	[[ -z "$save" ]] || { echo '--save is only supported with --staging' >&2; exit 2; }
+fi
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT HUP INT TERM
+age-keygen -o "$tmp/key" 2> "$tmp/info"
+recipient="$(sed -n 's/^# public key: //p' "$tmp/key")"
+private="$(cat "$tmp/key")"
+[[ -n "$recipient" && -n "$private" ]] || { echo 'age-keygen did not return a key pair' >&2; exit 1; }
+if $staging; then
+	umask 077
+	install -m 600 "$tmp/key" "$save"
+	variable=AGE_RECIPIENT_STAGING
+else
+	variable=AGE_RECIPIENT
+fi
+printf '%s\n' "$recipient" | gh variable set "$variable" -R "$repo"
+if ! $staging; then
+	printf '%s\n' 'Store this private key in your password manager. It is shown only once:'
+	printf '%s\n' "$private"
+fi
+unset private

@@ -9,10 +9,16 @@
 	import { live } from '$lib/live.svelte';
 	import { backupNudge } from '$lib/features/backup';
 	import { deliverBackup, readBackup } from '$lib/features/backup/export';
+	import { apiFetch, OfflineError } from '$lib/api/client';
+	import { backupStatusSchema } from '@hourtrail/core';
+	import { auth } from '$lib/features/cloud/auth.svelte';
 
 	let now = $state(Date.now());
 	let busy = $state(false);
 	let error = $state('');
+	let nightly = $state<{ last_nightly_at: number | null; dump: string | null } | null>(null);
+	let nightlyLoaded = $state(false);
+	let nightlyNow = $state(Date.now());
 	const status = live(async () => {
 		const value = (await db.local.get('last_backup_at'))?.value;
 		const setting = await db.setting.get('reporting_tz');
@@ -22,6 +28,11 @@
 		};
 	}, null);
 	const nudge = $derived(backupNudge(status.current?.last ?? null, now));
+	const nightlyWarning = $derived(
+		nightly?.last_nightly_at !== null &&
+			nightly?.last_nightly_at !== undefined &&
+			nightlyNow - nightly.last_nightly_at > 48 * 60 * 60 * 1000,
+	);
 	const lastDate = $derived(
 		status.current?.last !== null && status.current?.last !== undefined
 			? new Intl.DateTimeFormat('en-GB', {
@@ -34,7 +45,22 @@
 	);
 	onMount(() => {
 		const timer = setInterval(() => (now = Date.now()), 60_000);
-		return () => clearInterval(timer);
+		const nightlyTimer = setInterval(() => (nightlyNow = Date.now()), 60_000);
+		return () => {
+			clearInterval(timer);
+			clearInterval(nightlyTimer);
+		};
+	});
+	$effect(() => {
+		if (auth.status !== 'signed-in' || nightlyLoaded) return;
+		nightlyLoaded = true;
+		void apiFetch('/api/backup/status', { schema: backupStatusSchema })
+			.then((value) => {
+				nightly = value;
+			})
+			.catch((cause: unknown) => {
+				if (!(cause instanceof OfflineError)) nightly = null;
+			});
 	});
 
 	async function download() {
@@ -83,6 +109,16 @@
 					? "You haven't downloaded a backup yet."
 					: 'Your last backup is more than 30 days old.'}
 			/>
+		{/if}
+	{/if}
+	{#if auth.status === 'signed-in' && nightly}
+		<p>
+			{nightly.last_nightly_at === null
+				? 'No nightly backup yet'
+				: `Last nightly backup: ${new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(nightly.last_nightly_at)}`}
+		</p>
+		{#if nightlyWarning}
+			<Banner tone="caution" message="The last nightly backup is more than 2 days old." />
 		{/if}
 	{/if}
 	{#if error}<Banner tone="danger" message={error} />{/if}

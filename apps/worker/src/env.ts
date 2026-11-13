@@ -6,6 +6,7 @@ export interface Env {
 	ACCOUNT_KEY_HASH?: string;
 	VAPID_PUBLIC_KEY?: string;
 	VAPID_PRIVATE_KEY?: string;
+	BACKUP_HEARTBEAT_SECRET?: string;
 }
 
 export type AppEnv = { Bindings: Env; Variables: { requestId: string; device: Device } };

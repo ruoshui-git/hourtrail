@@ -1,0 +1,99 @@
+name: Nightly D1 backup
+
+on:
+  schedule:
+    - cron: '17 7 * * *'
+  workflow_dispatch:
+    inputs:
+      env:
+        description: Environment to back up
+        type: choice
+        options: [production, staging]
+        default: production
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: nightly-${{ github.event_name == 'schedule' && 'production' || inputs.env }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select environment
+        id: target
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "schedule" ]]; then target=production; else target="${{ inputs.env }}"; fi
+          if [[ "$target" == staging ]]; then
+            echo 'db=hourtrail-staging' >> "$GITHUB_OUTPUT"
+            echo 'origin=https://hourtrail-staging.ruoshuim.workers.dev' >> "$GITHUB_OUTPUT"
+            echo 'directory=dumps-staging' >> "$GITHUB_OUTPUT"
+            echo 'recipient=${{ vars.AGE_RECIPIENT_STAGING }}' >> "$GITHUB_OUTPUT"
+          else
+            echo 'db=hourtrail-production' >> "$GITHUB_OUTPUT"
+            echo 'origin=https://hourtrail.ruoshuim.workers.dev' >> "$GITHUB_OUTPUT"
+            echo 'directory=dumps' >> "$GITHUB_OUTPUT"
+            echo 'recipient=${{ vars.AGE_RECIPIENT }}' >> "$GITHUB_OUTPUT"
+          fi
+      - name: Export D1 to runner temporary directory
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_D1_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx --yes wrangler@4.160.1 d1 export "${{ steps.target.outputs.db }}" --remote --output "$RUNNER_TEMP/dump.sql"
+      - name: Verify export and install age
+        run: |
+          test -s "$RUNNER_TEMP/dump.sql"
+          sudo apt-get update
+          sudo apt-get install -y age
+      - name: Encrypt, prune and record run
+        env:
+          AGE_RECIPIENT: ${{ steps.target.outputs.recipient }}
+          TARGET_ENV: ${{ github.event_name == 'schedule' && 'production' || inputs.env }}
+          DUMP_DIR: ${{ steps.target.outputs.directory }}
+        run: |
+          set -euo pipefail
+          date_utc="$(date -u +%F)"
+          year="${date_utc:0:4}"
+          file="hourtrail-${date_utc}.sql.age"
+          mkdir -p "$DUMP_DIR/$year"
+          age -r "$AGE_RECIPIENT" -o "$DUMP_DIR/$year/$file" "$RUNNER_TEMP/dump.sql"
+          bytes="$(stat -c %s "$DUMP_DIR/$year/$file")"
+          rm -f "$RUNNER_TEMP/dump.sql"
+          # This file is published to the root of ruoshui-git/hourtrail-backups.
+          node prune.mjs "$DUMP_DIR"
+          printf '%s env=%s file=%s bytes=%s outcome=success\n' "$(date -u +%FT%TZ)" "$TARGET_ENV" "$DUMP_DIR/$year/$file" "$bytes" > last-run.txt
+          git config user.name hourtrail-backups-bot
+          git config user.email hourtrail-backups-bot@users.noreply.github.com
+          git add "$DUMP_DIR" last-run.txt
+          git commit -m "backup: ${TARGET_ENV} ${date_utc}" || true
+          git push
+      - name: Report heartbeat
+        env:
+          BACKUP_HEARTBEAT_SECRET: ${{ github.event_name == 'schedule' && secrets.BACKUP_HEARTBEAT_SECRET || (inputs.env == 'staging' && secrets.BACKUP_HEARTBEAT_SECRET_STAGING || secrets.BACKUP_HEARTBEAT_SECRET) }}
+          TARGET_ENV: ${{ github.event_name == 'schedule' && 'production' || inputs.env }}
+          DUMP_DIR: ${{ steps.target.outputs.directory }}
+        run: |
+          set -euo pipefail
+          origin=https://hourtrail.ruoshuim.workers.dev
+          if [[ "$TARGET_ENV" == staging ]]; then origin=https://hourtrail-staging.ruoshuim.workers.dev; fi
+          file="$(tail -n 1 last-run.txt | sed -E 's/.*file=([^ ]+).*/\1/')"
+          bytes="$(stat -c %s "$file")"
+          curl --fail --silent --show-error -X POST "$origin/api/backup/heartbeat" -H "Origin: $origin" -H 'Content-Type: application/json' -H "Authorization: Bearer $BACKUP_HEARTBEAT_SECRET" --data "{\"dump\":\"$(basename "$file")\",\"bytes\":$bytes}"
+      - name: Record a failed run
+        # SPEC: last-run.txt is updated on every run, so the scheduled workflow is never
+        # disabled for inactivity while it keeps failing. The job still fails and GitHub emails.
+        if: failure()
+        env:
+          TARGET_ENV: ${{ github.event_name == 'schedule' && 'production' || inputs.env }}
+        run: |
+          printf '%s env=%s outcome=failure run=%s\n' "$(date -u +%FT%TZ)" "$TARGET_ENV" "$GITHUB_RUN_ID" > last-run.txt
+          git config user.name hourtrail-backups-bot
+          git config user.email hourtrail-backups-bot@users.noreply.github.com
+          git add last-run.txt
+          git commit -m "backup: ${TARGET_ENV} failed $(date -u +%F)" || true
+          git pull --rebase || true
+          git push
