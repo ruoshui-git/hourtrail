@@ -17,7 +17,8 @@ export type LocalKey =
 	| 'last_backup_at'
 	| 'push_state'
 	| 'capture_location'
-	| 'auth_device';
+	| 'auth_device'
+	| 'sync_rejected';
 export type LocalRow = { key: LocalKey; value: unknown };
 export type LocalFix = Pick<
 	RecordOf<'session_fix'>,

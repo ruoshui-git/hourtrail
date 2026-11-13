@@ -5,12 +5,24 @@
 	import type { Snippet } from 'svelte';
 	import SessionEditorHost from '$lib/features/session/SessionEditorHost.svelte';
 	import { prepareLocalData } from '$lib/db/app';
+	import { auth } from '$lib/features/cloud/auth.svelte';
+	import { sync } from '$lib/features/sync/engine.svelte';
 
 	let { children }: { children: Snippet } = $props();
 
 	// Seed default types and the reporting zone once, outside any live query.
 	$effect(() => {
 		void prepareLocalData();
+	});
+	$effect(() => {
+		if (
+			auth.status === 'unknown' &&
+			page.url.pathname !== '/link' &&
+			page.url.pathname !== '/settings/cloud'
+		)
+			void auth.hydrate();
+		else if (auth.status === 'signed-in') sync.start();
+		else sync.stop();
 	});
 	// The first path segment names the destination, so /items/<id> still marks Items.
 	let current = $derived(
