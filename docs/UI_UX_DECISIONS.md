@@ -59,6 +59,16 @@ Decided 2026-11-13 for task 3.2. Recording never depends on being signed in: eve
 - **Sign out** confirms: "Sign out of this device? Your records stay here. New changes stay on this device until you sign in again."
 - A 401 from any request flips the app to signed out and shows a banner on Settings → Cloud and devices: "You were signed out. Sign in again to back up your records." The last known signed-in device is kept on the device, so opening the app offline does not show "signed out".
 
+## Sync status, details and the clock (task 3.4)
+
+Decided 2026-11-13. Words and states follow SPEC "What the user sees"; this section fixes placement and copy.
+
+- **Badge placement**: on phones the `SyncBadge` sits at the right of Home's date line (as in the Home sketch). On desktop it sits in the sidebar footer on every screen. Settings → Cloud and devices shows the same badge under "Signed in as …". Signed out, it reads "On this device only".
+- **Sync details** (tapping the badge opens a sheet): the state sentence, then "Last backed up: Today, 9:41 AM" (or "Not backed up yet"), then "3 changes waiting" when the outbox is not empty, and a "Sync now" button (disabled while a sync runs, labeled "Syncing…"). Offline: "You're offline. Your changes are saved on this device and will upload when you're back online." Error: the engine's last error sentence and "Try again". Signed out: "Sign in to back up and sync your records." with a link to Cloud and devices.
+- **Changes the cloud did not accept** (the engine's rejected list, newest first, at most 20 shown): a heading "Not accepted by the cloud", one line per change ("Session edit, 9:41 AM: {reason}"). They stay on this device. Nothing here is dismissible yet; a "Copy details" button copies the list for a bug report.
+- **Pending dots**: session rows in History and Home's Recent list, and work item rows, show the existing hollow pending dot (`pending` prop, aria-label "Not backed up yet") while that record has a change in the outbox.
+- **Clock caution**: when the stored server clock offset exceeds 2 minutes, Home shows a caution banner under the date line: "This device's clock is {N} minutes {ahead|behind}. Sessions started or stopped now are marked for review." Sessions started or stopped while the caution applies get `flags.clock_suspect`, which Daily review already lists as "Check session times". While the app is open, a jump of more than 2 minutes between the wall clock and the monotonic clock during a running session marks that session too. Recorded times are never corrected automatically.
+
 ## Changelog
 
 One line per behaviour change, newest first: `YYYY-MM-DD task-id: what changed and why`.
