@@ -1,21 +1,15 @@
-import { apiHeaders } from './security';
+import { createApp } from './app';
+import type { Env } from './env';
 
-export interface Env {
-	ASSETS: Fetcher;
-}
+export type { Env } from './env';
 
-function json(status: number, body: unknown): Response {
-	return new Response(JSON.stringify(body), { status, headers: apiHeaders() });
-}
+const app = createApp();
 
 export default {
 	async fetch(request: Request, env: Env): Promise<Response> {
-		const url = new URL(request.url);
-		if (url.pathname === '/api' || url.pathname.startsWith('/api/')) {
-			if (url.pathname === '/api/health' && request.method === 'GET') {
-				return json(200, { ok: true, time: Date.now() });
-			}
-			return json(404, { error: { code: 'not_found', message: 'No such endpoint.' } });
+		const { pathname } = new URL(request.url);
+		if (pathname === '/api' || pathname.startsWith('/api/')) {
+			return app.fetch(request, env);
 		}
 		// Static assets (with SPA fallback) are normally served before the Worker runs;
 		// this covers anything routed here anyway.
