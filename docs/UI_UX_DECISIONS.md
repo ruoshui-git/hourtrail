@@ -110,6 +110,7 @@ Decided 2026-11-13.
 
 One line per behaviour change, newest first: `YYYY-MM-DD task-id: what changed and why`.
 
+- 2026-11-13 4.5: Settings > Reminders turns on forgotten-session reminders (threshold, repeats, per-type), and notifications per device; the service worker shows them and a tap opens Home's Still working sheet (Keep running, Stop now, Stop at...), which also appears once on opening the app past the threshold.
 - 2026-11-13 4.3: Reports > Create report builds a report with a live preview that prints as the same page (work hours first, groups with sessions and notes), excludable sessions, custom headings, synced presets that follow the calendar, and Export (Print, CSV, Excel). Polish for 4.6: dates wrap in long rows; the Work item column repeats the group when grouping by work item; durations print 1h 0m while charts show 1h 00m.
 - 2026-11-13 4.2: Reports shows Statistics: range control, Work hours headline with other types beside it, a stacked bar chart with a table of the days or weeks that have time, and breakdowns by work item, project and place. Polish for 4.6: Custom range uses text date fields until a date-only input exists; charts pad minutes (1h 05m) and ignore the decimal format while the headline does not.
 - 2026-11-13 3.7: Settings > Privacy can back up raw coordinates (off by default) and delete them from the cloud (scrubbed, then deleted; this device keeps a copy). Settings > Cloud and devices can erase all cloud data with the account key, optionally wiping this device.
