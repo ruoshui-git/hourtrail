@@ -95,10 +95,22 @@ Decided 2026-11-13.
 - **The notification**: title "Still working?", body "{work item or Untitled session} has been running for 4h 12m." Tapping it opens `/?check={session_id}`.
 - **"Still working?" sheet** (from the notification, or once per session on opening the app with a session running past the threshold): "{name} has been running since {time} ({duration})." Three actions: "Keep running" (dismisses; the in-app prompt does not return for this session until a repeat interval has passed, if repeats are on), "Stop now", and "Stop at…" (opens an end-time field, default the threshold time, never later than now, never before the start). A reminder never ends a session by itself.
 
+## Report builder and printing (`/reports/new`, task 4.3)
+
+Decided 2026-11-13.
+
+- **Layout**: on desktop, the options sit in a left column (360 px) beside a live preview of the printed page. On phones, the options come first, then "Preview", which opens the preview full screen. Header: "Create report", a back link to Reports, and Export (Print, CSV, Excel).
+- **Options**, all reflected live in the preview: Title (default "Work report"); Range (This month default; Last month; This week; Custom with two date fields); Types (a checkbox per activity type, all checked by default); Group by (Work item, Project, Day, Type); "Show sessions" and "Show notes" switches; "Hours as" (2h 14m or 2.23). "Headings" is a disclosure listing each heading with a text field (placeholder the English default; any language).
+- **Excluding sessions**: with Show sessions on, each session row in the preview has a checkbox (checked = included). Unchecking adds it to `excluded_session_ids`, and the row stays visible in the preview, struck through and marked "Excluded", so it can be put back. Printed and exported output omits it.
+- **Presets**: "Save as preset" asks for a name (default the title) and stores a `report_preset`. A "Presets" menu at the top loads one (range presets stay relative: a preset saved on "This month" means the current month when loaded), renames or deletes. Presets sync like everything else.
+- **Printed page** (A4 and Letter): the title; the range; then the "Work hours" total, stated on its own line before other types (each with its hours) and the total. Groups follow, each with its subtotal and, when shown, its session rows (date, start–end, hours, work item) with notes under each row. Table headers repeat on every page, rows never split across pages, ink on white, no app chrome. Footer: "Hourtrail · printed {date}".
+- **Export**: Print opens the browser's print dialog for the preview. CSV and Excel download (or share on iPhone) the files from task 4.4, named like `hourtrail-report-2026-11`.
+
 ## Changelog
 
 One line per behaviour change, newest first: `YYYY-MM-DD task-id: what changed and why`.
 
+- 2026-11-13 4.2: Reports shows Statistics: range control, Work hours headline with other types beside it, a stacked bar chart with a table of the days or weeks that have time, and breakdowns by work item, project and place. Polish for 4.6: Custom range uses text date fields until a date-only input exists; charts pad minutes (1h 05m) and ignore the decimal format while the headline does not.
 - 2026-11-13 3.7: Settings > Privacy can back up raw coordinates (off by default) and delete them from the cloud (scrubbed, then deleted; this device keeps a copy). Settings > Cloud and devices can erase all cloud data with the account key, optionally wiping this device.
 - 2026-11-13 3.5: Settings > Backup can restore a backup file: "Add what's missing", or "Replace everything" after saving a backup of this device and typing `replace`. Polish note for 4.6: the summary lists zero counts too.
 - 2026-11-13 3.4: Signed-in devices sync. The sync badge sits on Home's date line on phones and in the sidebar footer on desktop, and opens Sync details (last backup, waiting changes, Sync now, changes the cloud did not accept). Rows with unsent changes show the pending dot. A device clock more than 2 minutes off shows a caution on Home and marks sessions for review.
