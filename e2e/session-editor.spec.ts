@@ -157,6 +157,13 @@ test('session editor supports manual entry, safe edits, warnings, delete undo, a
 	await page.getByLabel('Note').fill('第二段库存工作记录');
 	await page.getByLabel('Note').blur();
 	await page.getByRole('button', { name: 'Close' }).click();
+	await expect
+		.poll(
+			async () =>
+				(await readData(page)).sessions.find((session) => session.id === completedInventory.id)
+					?.note,
+		)
+		.toBe('第二段库存工作记录');
 	let updated = await readData(page);
 	const inventorySessions = updated.sessions.filter(
 		(session) => session.work_item_id === inventory.id,
@@ -182,6 +189,11 @@ test('session editor supports manual entry, safe edits, warnings, delete undo, a
 	await page.getByLabel('Note').fill('库存管理系统开发');
 	await page.getByRole('button', { name: 'Add session' }).click();
 	await expect(page.getByRole('heading', { name: 'Add session' })).toHaveCount(0);
+	await expect
+		.poll(async () =>
+			(await readData(page)).sessions.some((session) => session.note === '库存管理系统开发'),
+		)
+		.toBe(true);
 	updated = await readData(page);
 	const firstManual = updated.sessions.find((session) => session.note === '库存管理系统开发')!;
 	expect(firstManual.source).toBe('manual');
@@ -194,6 +206,12 @@ test('session editor supports manual entry, safe edits, warnings, delete undo, a
 		page.getByText('Enter an end time for this session.', { exact: true }),
 	).toBeVisible();
 	await page.getByRole('button', { name: 'Close' }).click();
+	await expect
+		.poll(
+			async () =>
+				(await readData(page)).sessions.find((session) => session.id === firstManual.id)?.end_at,
+		)
+		.not.toBeNull();
 	expect(
 		(await readData(page)).sessions.find((session) => session.id === firstManual.id)?.end_at,
 	).not.toBeNull();
@@ -206,6 +224,11 @@ test('session editor supports manual entry, safe edits, warnings, delete undo, a
 	await page.getByLabel('Activity type').selectOption({ label: 'Volunteer' });
 	await page.getByLabel('Note').fill('第二寺院志愿工作');
 	await page.getByRole('button', { name: 'Add session' }).click();
+	await expect
+		.poll(async () =>
+			(await readData(page)).sessions.some((session) => session.note === '第二寺院志愿工作'),
+		)
+		.toBe(true);
 	updated = await readData(page);
 	const secondManual = updated.sessions.find((session) => session.note === '第二寺院志愿工作')!;
 	expect(secondManual.source).toBe('manual');

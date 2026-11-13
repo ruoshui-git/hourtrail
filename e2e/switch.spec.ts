@@ -105,6 +105,14 @@ test('Switch searches, creates a named item, and Undo restores the previous sess
 	await page.getByRole('button', { name: 'Start “Fix the garden gate”' }).click();
 	await expect(page.getByText('Switched to Fix the garden gate')).toBeVisible();
 	await page.getByRole('button', { name: 'Undo' }).click();
+	await expect
+		.poll(
+			async () =>
+				(await readSessions(page)).filter(
+					(session) => session.end_at === null && session.deleted_at === null,
+				).length,
+		)
+		.toBe(1);
 	const records = await readSessions(page);
 	expect(
 		records.filter((session) => session.end_at === null && session.deleted_at === null),
@@ -153,9 +161,19 @@ test('two running sessions resolve at the later start with Undo', async ({ page 
 		});
 	}
 	await resolution.click();
+	await expect
+		.poll(
+			async () => (await readSessions(page)).find((session) => session.id === earlier.id)?.end_at,
+		)
+		.toBe(later.start_at);
 	let sessionsAfter = await readSessions(page);
 	expect(sessionsAfter.find((session) => session.id === earlier.id)?.end_at).toBe(later.start_at);
 	await page.getByRole('button', { name: 'Undo' }).click();
+	await expect
+		.poll(
+			async () => (await readSessions(page)).find((session) => session.id === earlier.id)?.end_at,
+		)
+		.toBeNull();
 	sessionsAfter = await readSessions(page);
 	expect(sessionsAfter.find((session) => session.id === earlier.id)?.end_at).toBeNull();
 });
@@ -167,9 +185,11 @@ test('two running sessions can stop the earlier one now or keep both', async ({ 
 	const running = (await readSessions(page)).filter((session) => session.end_at === null);
 	const earlier = [...running].sort((a, b) => a.start_at - b.start_at)[0]!;
 	await page.getByRole('button', { name: /Stop .* now/ }).click();
-	expect(
-		(await readSessions(page)).find((session) => session.id === earlier.id)?.end_at,
-	).toBeGreaterThan(0);
+	await expect
+		.poll(
+			async () => (await readSessions(page)).find((session) => session.id === earlier.id)?.end_at,
+		)
+		.toBeGreaterThan(0);
 	await page.getByRole('button', { name: 'Undo' }).click();
 	await page.getByRole('button', { name: 'Keep both' }).click();
 	await expect(page.getByText('Two sessions are running.')).toHaveCount(0);
@@ -183,6 +203,13 @@ test('more than two running sessions can stop all but the latest', async ({ page
 	expect(before).toHaveLength(3);
 	const latest = [...before].sort((a, b) => a.start_at - b.start_at).at(-1)!;
 	await page.getByRole('button', { name: 'Stop all but the latest' }).click();
+	await expect
+		.poll(async () =>
+			(await readSessions(page))
+				.filter((session) => session.end_at === null)
+				.map((session) => session.id),
+		)
+		.toEqual([latest.id]);
 	const after = (await readSessions(page)).filter((session) => session.end_at === null);
 	expect(after.map((session) => session.id)).toEqual([latest.id]);
 });

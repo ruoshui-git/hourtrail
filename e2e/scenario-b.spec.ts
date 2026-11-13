@@ -11,9 +11,11 @@ test('Scenario B: resuming work creates a second independent session', async ({ 
 	await page.getByRole('button', { name: item.name, exact: true }).click();
 	await page.clock.fastForward('03:00:00');
 	await page.getByRole('button', { name: 'Stop' }).click();
+	await expect.poll(async () => (await readRecords(page)).session[0]?.end_at).not.toBeNull();
 	const completedFirst = (await readRecords(page)).session[0]!;
 	await page.clock.fastForward('02:00:00');
 	await page.getByRole('button', { name: `Start ${item.name}` }).click();
+	await expect.poll(async () => (await readRecords(page)).session.length).toBe(2);
 	const sessions = (await readRecords(page)).session;
 	expect(sessions).toHaveLength(2);
 	const [first, second] = sessions.sort((a, b) => a.start_at - b.start_at);

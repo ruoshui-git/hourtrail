@@ -31,6 +31,9 @@ test('Scenario C: History notes stay distinct and attached to their work item', 
 	await page.getByLabel('Note').blur();
 	await expect(page.getByText('Saved', { exact: true })).toBeVisible();
 	await page.getByRole('button', { name: 'Close' }).click();
+	await expect
+		.poll(async () => (await readRecords(page)).session.map((row) => row.note))
+		.toEqual(['早晨记录：库存管理系统开发 🙂', '下午记录！第1寺院 / 修复洗手台']);
 	const data = await readRecords(page);
 	const sessions = data.session.sort((a, b) => a.start_at - b.start_at);
 	expect(sessions.map((row) => row.note)).toEqual([

@@ -93,7 +93,7 @@ test('suggested locations can be confirmed', async ({ page, context }) => {
 	await page.getByRole('button', { name: 'Start', exact: true }).click();
 	await expect(page.getByText('Near 第1寺院 (±40 m)?')).toBeVisible();
 	await page.getByRole('button', { name: 'Confirm' }).click();
-	expect((await readSession(page)).place_id).toBe(PLACE_ID);
+	await expect.poll(async () => (await readSession(page))?.place_id).toBe(PLACE_ID);
 });
 
 test('ambiguous locations list candidates nearest first', async ({ page, context }) => {
