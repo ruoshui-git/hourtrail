@@ -24,7 +24,11 @@ export function errorResponse(err: ApiError): Response {
 			...(err.details ? { details: err.details } : {}),
 		},
 	};
-	return new Response(JSON.stringify(body), { status: err.status, headers: apiHeaders() });
+	const headers = apiHeaders();
+	if (err.code === 'locked' && typeof err.details?.retry_after_s === 'number') {
+		headers.set('Retry-After', String(err.details.retry_after_s));
+	}
+	return new Response(JSON.stringify(body), { status: err.status, headers });
 }
 
 const httpErrors: Partial<Record<number, [ApiErrorCode, string]>> = {
@@ -40,11 +44,16 @@ const httpErrors: Partial<Record<number, [ApiErrorCode, string]>> = {
 };
 
 export const onError: ErrorHandler<AppEnv> = (err, c) => {
-	if (err instanceof ApiError) return errorResponse(err);
+	// Preserve headers prepared by auth middleware, including cookie renewal on errors.
+	const respond = (error: ApiError) => {
+		const response = errorResponse(error);
+		return c.newResponse(response.body, response);
+	};
+	if (err instanceof ApiError) return respond(err);
 	if (err instanceof HTTPException) {
 		const mapped = httpErrors[err.status];
-		if (mapped) return errorResponse(new ApiError(err.status, ...mapped));
+		if (mapped) return respond(new ApiError(err.status, ...mapped));
 	}
 	console.error('API request failed', { requestId: c.var.requestId, error: err });
-	return errorResponse(new ApiError(500, 'internal', 'Something went wrong.'));
+	return respond(new ApiError(500, 'internal', 'Something went wrong.'));
 };

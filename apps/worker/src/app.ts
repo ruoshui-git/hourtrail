@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import type { AppEnv } from './env';
 import { ApiError, errorResponse, onError } from './errors';
 import { apiHeadersMiddleware, bodyLimit, requestId, sameOriginJson } from './middleware';
+import { auth } from './routes/auth';
 import { health } from './routes/health';
 
 export function createApp(): Hono<AppEnv> {
@@ -9,6 +10,7 @@ export function createApp(): Hono<AppEnv> {
 	app.use('/api/*', requestId, apiHeadersMiddleware, bodyLimit, sameOriginJson);
 	app.onError(onError);
 	app.route('/api/health', health);
+	app.route('/api/auth', auth);
 	app.notFound((c) => {
 		// Ask Hono's router so parameters and nested route groups follow the same
 		// matching rules as normal dispatch. Middleware alone does not define a path.

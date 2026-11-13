@@ -1,3 +1,5 @@
+import type { Device } from './auth';
+
 export interface Env {
 	ASSETS: Fetcher;
 	DB: D1Database;
@@ -6,4 +8,4 @@ export interface Env {
 	VAPID_PRIVATE_KEY?: string;
 }
 
-export type AppEnv = { Bindings: Env; Variables: { requestId: string } };
+export type AppEnv = { Bindings: Env; Variables: { requestId: string; device: Device } };

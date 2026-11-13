@@ -4,6 +4,7 @@
  */
 export const APP_NAME = 'Hourtrail';
 export * from './api/errors';
+export * from './api/auth';
 export * from './blaze';
 export * from './ids';
 export * from './schema';
