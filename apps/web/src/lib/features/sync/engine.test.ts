@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { newId } from '@hourtrail/core';
+import { buildBackup, MAX_BATCH, newId } from '@hourtrail/core';
 import type { RecordOf } from '@hourtrail/core';
 import { ApiError, OfflineError } from '$lib/api/client';
 import { createRepo } from '$lib/db/repo';
@@ -11,7 +11,7 @@ import { SyncEngine } from './engine.svelte';
 const databases: HourtrailDB[] = [];
 type RequestOptions = {
 	method?: string;
-	body?: { batch_id: string; mutations: { id: string; record_id: string }[] };
+	body?: { batch_id: string; mode?: 'restore'; mutations: { id: string; record_id: string }[] };
 	schema: { parse(value: unknown): unknown };
 };
 const waitFor = async (predicate: () => Promise<boolean>) => {
@@ -243,4 +243,121 @@ describe('sync engine', () => {
 		expect(calls).toBe(2);
 		engine.stop();
 	});
+});
+
+it('separates consecutive modes, respects MAX_BATCH and resends a restore batch unchanged', async () => {
+	const sent: NonNullable<RequestOptions['body']>[] = [];
+	let lost = false;
+	const { database, repository, engine } = fixture(async (path, options) => {
+		if (path === '/api/sync/push') {
+			sent.push(structuredClone(options.body!));
+			if (options.body!.mode === 'restore' && !lost) {
+				lost = true;
+				throw new OfflineError();
+			}
+			return {
+				batch_id: options.body!.batch_id,
+				seq: 1,
+				applied: options.body!.mutations.length,
+				rejected: [],
+				server_time: 1000,
+			};
+		}
+		return { records: [], next_since: 0, more: false, server_time: 1000 };
+	});
+	await database.local.put({ key: 'device_id', value: 'device' });
+	for (let i = 0; i < MAX_BATCH + 2; i++)
+		await repository.create('project', { name: `${i}`, archived_at: null });
+	const rows = await database.outbox.toArray();
+	// Two normal batches, then two restore rows, then normal, then restore.
+	for (const index of [MAX_BATCH, MAX_BATCH + 1])
+		await database.outbox.update(rows[index]!.seq, { mode: 'restore' });
+	await repository.create('project', { name: 'normal boundary', archived_at: null });
+	await repository.create('project', { name: 'restore boundary', archived_at: null });
+	const last = await database.outbox.orderBy('seq').last();
+	await database.outbox.update(last!.seq, { mode: 'restore' });
+	engine.start();
+	await waitFor(async () => engine.status === 'offline');
+	const persisted = (await database.outbox.toArray()).slice(0, 2);
+	expect(
+		persisted.every((row) => row.batch_id === sent[1]!.batch_id && row.mode === 'restore'),
+	).toBe(true);
+	await engine.syncNow();
+	await waitFor(async () => engine.status === 'synced' && (await database.outbox.count()) === 0);
+	expect(sent.map((batch) => [batch.mode, batch.mutations.length])).toEqual([
+		[undefined, 50],
+		['restore', 2],
+		['restore', 2],
+		[undefined, 1],
+		['restore', 1],
+	]);
+	expect(sent[2]).toEqual(sent[1]);
+	const ordered = [sent[0]!, ...sent.slice(2)].flatMap((batch) => batch.mutations.map((m) => m.id));
+	expect(ordered).toEqual([
+		...rows.map((row) => row.mutation.id),
+		sent[3]!.mutations[0]!.id,
+		sent[4]!.mutations[0]!.id,
+	]);
+	engine.stop();
+});
+
+it('replays pending restore rows with their modes over a pull arriving during a restore', async () => {
+	let pulls = 0;
+	const backup = buildBackup({
+		records: {
+			activity_type: [],
+			project: [],
+			work_item: [],
+			session: [],
+			place: [],
+			session_fix: [],
+			review_mark: [],
+			day_review: [],
+			setting: [],
+			report_preset: [],
+			conflict: [],
+		},
+		localFixes: [],
+		exportedAt: 500,
+		device: { id: 'old', name: null },
+	});
+	const record: RecordOf<'project'> = {
+		id: newId(),
+		name: 'Backup value',
+		archived_at: null,
+		rev: 0,
+		created_at: 10,
+		updated_at: 20,
+		updated_by: 'old',
+		deleted_at: null,
+	};
+	backup.records.project.push(record);
+	const { database, repository, engine } = fixture(async (path) => {
+		if (path.startsWith('/api/sync/pull') && pulls++ === 0) {
+			await repository.restoreRecords(backup, 'replace');
+			return {
+				records: [
+					{
+						entity: 'project',
+						record: { ...record, name: 'Server value', updated_at: 2000, updated_by: 'server' },
+					},
+				],
+				next_since: 1,
+				more: false,
+				server_time: 1000,
+			};
+		}
+		throw new OfflineError();
+	});
+	engine.start();
+	try {
+		await waitFor(async () => (await database.local.get('sync_cursor'))?.value === 1);
+		expect((await database.project.get(record.id))?.name).toBe('Backup value');
+		expect((await database.outbox.toArray()).map((row) => row.mode)).toEqual([
+			undefined,
+			'restore',
+		]);
+	} finally {
+		engine.stop();
+	}
 });

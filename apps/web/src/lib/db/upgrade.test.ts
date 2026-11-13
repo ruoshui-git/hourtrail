@@ -1,7 +1,8 @@
 import 'fake-indexeddb/auto';
 import Dexie from 'dexie';
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
 import { DEFAULT_ACTIVITY_TYPES, ENTITIES, newId, putMutation } from '@hourtrail/core';
+import { SyncEngine } from '$lib/features/sync/engine.svelte';
 import { openDb, V1_STORES } from './schema';
 
 // Keep each historical fixture and its stores unchanged. For v2, add
@@ -78,6 +79,46 @@ it('reopens a v1 fixture without losing entities, pending mutations or local dat
 				(entity) => !['session', 'work_item'].includes(entity),
 			)) {
 				expect(db.entity(entity).schema.indexes.map((index) => index.name)).toEqual(['updated_at']);
+			}
+		},
+	);
+});
+
+it('loads and pushes a pre-restore v1 outbox row without a mode as an ordinary batch', async () => {
+	const record = { ...DEFAULT_ACTIVITY_TYPES[0]!, updated_by: 'fixture-device' };
+	const mutation = putMutation('activity_type', record, { now: 0, deviceId: 'fixture-device' });
+	await upgradeFixture(
+		1,
+		V1_STORES,
+		async (old) => {
+			await old.table('outbox').put({ seq: 1, mutation, batch_id: null, queued_at: 1000 });
+			await old.table('local').put({ key: 'device_id', value: 'fixture-device' });
+		},
+		async (db) => {
+			const posted: unknown[] = [];
+			const engine = new SyncEngine({
+				db,
+				isSignedIn: () => true,
+				handleUnauthorized: () => undefined,
+				request: (async (path, options) => {
+					if (path === '/api/sync/push') {
+						const body = options.body as { batch_id: string };
+						posted.push(body);
+						return { batch_id: body.batch_id, seq: 1, applied: 1, rejected: [], server_time: 1000 };
+					}
+					return { records: [], next_since: 0, more: false, server_time: 1000 };
+				}) as ConstructorParameters<typeof SyncEngine>[0]['request'],
+			});
+			try {
+				engine.start();
+				await vi.waitFor(() => expect(engine.status).toBe('synced'));
+				expect(db.verno).toBe(1);
+				expect(posted).toHaveLength(1);
+				expect(posted[0]).not.toHaveProperty('mode');
+				expect(posted[0]).toMatchObject({ mutations: [mutation] });
+				expect(await db.outbox.count()).toBe(0);
+			} finally {
+				engine.stop();
 			}
 		},
 	);

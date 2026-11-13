@@ -6,7 +6,7 @@ import {
 	newId,
 	pushAckSchema,
 	pullResponseSchema,
-	replay,
+	applyMutation,
 	schemas,
 } from '@hourtrail/core';
 import type { Entity } from '@hourtrail/core';
@@ -179,6 +179,7 @@ export class SyncEngine {
 				body: {
 					batch_id: batchId,
 					device_id: deviceRow.value,
+					...(rows[0]!.mode ? { mode: rows[0]!.mode } : {}),
 					mutations: rows.map((row) => row.mutation),
 				},
 				schema: pushAckSchema,
@@ -217,13 +218,13 @@ export class SyncEngine {
 
 	private async nextBatch(): Promise<OutboxRow[]> {
 		return this.database.transaction('rw', this.database.outbox, async () => {
-			const rows = await this.database.outbox.orderBy('seq').toArray();
+			const rows = await this.database.outbox.orderBy('seq').limit(MAX_BATCH).toArray();
 			const first = rows[0];
 			if (!first) return [];
 			if (first.batch_id !== null) return rows.filter((row) => row.batch_id === first.batch_id);
 			const batch = [] as OutboxRow[];
 			for (const row of rows) {
-				if (row.batch_id !== null || batch.length >= MAX_BATCH) break;
+				if (row.batch_id !== null || row.mode !== first.mode || batch.length >= MAX_BATCH) break;
 				batch.push(row);
 			}
 			const batchId = this.id();
@@ -264,14 +265,16 @@ export class SyncEngine {
 					// Read the outbox once per page: the transaction holds it, so it cannot change here.
 					const pending = await this.database.outbox.orderBy('seq').toArray();
 					for (const { entity, record } of parsed) {
-						const mutations = pending
-							.filter(
-								(row) => row.mutation.entity === entity && row.mutation.record_id === record.id,
-							)
-							.map((row) => row.mutation);
-						const value = mutations.length
-							? replay(record, mutations, { now: this.clock() }).next
-							: record;
+						const mutations = pending.filter(
+							(row) => row.mutation.entity === entity && row.mutation.record_id === record.id,
+						);
+						let value: typeof record | null = record;
+						for (const row of mutations) {
+							value = applyMutation(value, row.mutation, {
+								now: this.clock(),
+								mode: row.mode,
+							}).next;
+						}
 						// Pulled server state bypasses repo by design: it must not create new outbox rows.
 						if (value) await this.database.entity(entity).put(value);
 						else await this.database.entity(entity).delete(record.id);

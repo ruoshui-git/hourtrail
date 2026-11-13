@@ -2,6 +2,8 @@ import {
 	applyMutation,
 	DEFAULT_ACTIVITY_TYPES,
 	deleteMutation,
+	ENTITIES,
+	localFixSchema,
 	invertMutation,
 	NEW_WORK_ITEM_TYPE_ID,
 	newId,
@@ -11,9 +13,13 @@ import {
 	undeleteMutation,
 	WORK_TYPE_ID,
 } from '@hourtrail/core';
-import type { AnyRecord, Entity, Mutation, RecordOf } from '@hourtrail/core';
+import type { AnyRecord, BackupFile, Entity, Mutation, RecordOf } from '@hourtrail/core';
 import type { HourtrailDB } from './schema';
 import { clockSuspect } from '$lib/features/clock/clock';
+
+export type RestoreMode = 'add-missing' | 'replace';
+export type RestoreCounts = { added: number; skipped: number; replaced: number; removed: number };
+export type RestoreProgress = (completed: number, total: number) => void;
 
 export type Clock = () => number;
 export type UndoToken = { label: string; mutations: Mutation[]; before: (AnyRecord | null)[] };
@@ -25,6 +31,11 @@ type Session = RecordOf<'session'>;
 type StartOptions = { workItemId?: string | null };
 type Started = { session: Session; undo: UndoToken; alreadyRunning: boolean };
 export interface Repo {
+	restoreRecords(
+		input: BackupFile,
+		mode: RestoreMode,
+		onProgress?: RestoreProgress,
+	): Promise<RestoreCounts>;
 	deviceId(): Promise<string>;
 	ensureSeeded(): Promise<void>;
 	create<E extends Entity>(entity: E, fields: Fields<E>): Promise<RecordOf<E>>;
@@ -200,7 +211,110 @@ export function createRepo(
 		))!;
 	}
 
+	async function restoreRecords(
+		input: BackupFile,
+		mode: RestoreMode,
+		onProgress?: RestoreProgress,
+	): Promise<RestoreCounts> {
+		type Operation =
+			| { kind: 'put'; entity: Entity; record: AnyRecord }
+			| { kind: 'delete'; entity: Entity; id: string }
+			| { kind: 'fix'; record: BackupFile['local_fixes'][number] }
+			| { kind: 'remove-fix'; id: string };
+		const operations: Operation[] = [];
+		// Validate the entire input before the first chunk can commit.
+		for (const entity of ENTITIES) {
+			for (const record of input.records[entity]) {
+				schemas[entity].parse(record);
+				operations.push({ kind: 'put', entity, record });
+			}
+		}
+		for (const record of input.local_fixes) {
+			localFixSchema.parse(record);
+			operations.push({ kind: 'fix', record });
+		}
+		if (mode === 'replace') {
+			await db.transaction('r', [...ENTITIES, 'local_fix'], async () => {
+				for (const entity of ENTITIES) {
+					const ids = new Set(input.records[entity].map((record) => record.id));
+					for (const id of await db.entity(entity).toCollection().primaryKeys()) {
+						if (!ids.has(id)) operations.push({ kind: 'delete', entity, id });
+					}
+				}
+				const fixes = new Set(input.local_fixes.map((fix) => fix.id));
+				for (const id of await db.local_fix.toCollection().primaryKeys()) {
+					if (!fixes.has(id)) operations.push({ kind: 'remove-fix', id });
+				}
+			});
+		}
+		const counts: RestoreCounts = { added: 0, skipped: 0, replaced: 0, removed: 0 };
+		const at = clock();
+		onProgress?.(0, operations.length);
+		for (let offset = 0; offset < operations.length; offset += 500) {
+			const chunk = operations.slice(offset, offset + 500);
+			await db.transaction('rw', [...ENTITIES, 'local_fix', 'outbox', 'local'], async () => {
+				const ctx = await context(at);
+				const queue = async (mutation: Mutation, restore = false) => {
+					await db.outbox.add({
+						mutation,
+						batch_id: null,
+						queued_at: at,
+						...(restore ? { mode: 'restore' as const } : {}),
+					});
+				};
+				for (const operation of chunk) {
+					if (operation.kind === 'put') {
+						const { entity, record } = operation;
+						const present = await db.entity(entity).get(record.id);
+						if (mode === 'add-missing' && present) {
+							counts.skipped++;
+							continue;
+						}
+						await db.entity(entity).put(record);
+						if (mode === 'replace') {
+							// Keep each deletion-state transition adjacent to its put in queue order.
+							await queue(undeleteMutation(entity, record.id, ctx));
+							await queue(putMutation(entity, { ...record, deleted_at: null }, ctx), true);
+							if (record.deleted_at !== null) await queue(deleteMutation(entity, record.id, ctx));
+						} else await queue(putMutation(entity, record, ctx));
+						if (present) counts.replaced++;
+						else counts.added++;
+					} else if (operation.kind === 'delete') {
+						const before = await db.entity(operation.entity).get(operation.id);
+						if (!before) continue;
+						const mutation = deleteMutation(operation.entity, operation.id, ctx);
+						const { next } = applyMutation(before, mutation, { now: at });
+						if (next) await db.entity(operation.entity).put(next);
+						await queue(mutation);
+						counts.removed++;
+					} else if (operation.kind === 'fix') {
+						const present = await db.local_fix.get(operation.record.id);
+						if (mode === 'add-missing' && present) {
+							counts.skipped++;
+							continue;
+						}
+						await db.local_fix.put(operation.record);
+						if (present) counts.replaced++;
+						else counts.added++;
+					} else {
+						await db.local_fix.delete(operation.id);
+						counts.removed++;
+					}
+				}
+			});
+			onProgress?.(Math.min(offset + chunk.length, operations.length), operations.length);
+			// Yield between committed chunks so the progress line can paint.
+			await new Promise<void>((resolve) => setTimeout(resolve, 0));
+		}
+		await db.local.put({
+			key: 'last_restore',
+			value: { at, mode, exported_at: input.exported_at, counts },
+		});
+		return counts;
+	}
+
 	return {
+		restoreRecords,
 		deviceId: () => transaction([], identity),
 		ensureSeeded: () =>
 			transaction(['activity_type'], async (now) => {

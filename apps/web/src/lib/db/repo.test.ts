@@ -2,6 +2,8 @@ import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
 	applyMutation,
+	buildBackup,
+	sessionFixId,
 	DEFAULT_ACTIVITY_TYPES,
 	ENTITIES,
 	newId,
@@ -9,7 +11,7 @@ import {
 	planSplit,
 	WORK_TYPE_ID,
 } from '@hourtrail/core';
-import type { AnyRecord } from '@hourtrail/core';
+import type { AnyRecord, BackupFile } from '@hourtrail/core';
 import { createRepo } from './repo';
 import type { UndoToken } from './repo';
 import { openDb } from './schema';
@@ -557,5 +559,221 @@ describe('applyPlan', () => {
 			}),
 		).rejects.toThrow();
 		expect(await db.outbox.count()).toBe(before);
+	});
+});
+
+async function backupOf(db: HourtrailDB): Promise<BackupFile> {
+	return buildBackup({
+		records: Object.fromEntries(
+			await Promise.all(
+				ENTITIES.map(async (entity) => [entity, await db.entity(entity).toArray()]),
+			),
+		) as BackupFile['records'],
+		localFixes: await db.local_fix.toArray(),
+		exportedAt: 900,
+		device: { id: 'backup-device', name: null },
+	});
+}
+
+describe('restoreRecords', () => {
+	it('adds absent ids including tombstones and fixes, preserving every field and existing ids', async () => {
+		const source = fixture();
+		const { session, workItem } = await source.repo.startNamed('库存管理系统开发');
+		await source.repo.stop();
+		const removed = await source.repo.create('project', { name: '修复洗手台', archived_at: null });
+		await source.repo.remove('project', removed.id);
+		const fix = {
+			id: sessionFixId(session.id, 'start'),
+			session_id: session.id,
+			kind: 'start' as const,
+			lat: 44,
+			lng: -63,
+			accuracy_m: 12,
+			captured_at: 123,
+		};
+		await source.db.local_fix.put(fix);
+		const backup = await backupOf(source.db);
+		backup.records.session[0]!.rev = 42;
+		const target = fixture();
+		const present = { ...workItem, name: '第1寺院', deleted_at: 500 };
+		await target.db.work_item.put(present);
+		const counts = await target.repo.restoreRecords(backup, 'add-missing');
+		expect(counts).toEqual({ added: 3, skipped: 1, replaced: 0, removed: 0 });
+		expect(await target.db.work_item.get(workItem.id)).toEqual(present);
+		expect(await target.db.session.toArray()).toEqual(backup.records.session);
+		expect(await target.db.project.toArray()).toEqual(backup.records.project);
+		expect(await target.db.local_fix.toArray()).toEqual([fix]);
+		const queue = await target.db.outbox.toArray();
+		expect(queue).toHaveLength(2);
+		expect(queue.every((row) => row.mode === undefined && row.mutation.kind === 'put')).toBe(true);
+		expect(queue.map((row) => row.mutation.value)).toEqual([
+			backup.records.project[0],
+			backup.records.session[0],
+		]);
+		expect((await target.db.local.get('last_restore'))?.value).toEqual({
+			at: 1000,
+			mode: 'add-missing',
+			exported_at: 900,
+			counts,
+		});
+		await target.db.local_fix.put({ ...fix, lat: 45 });
+		const before = await target.db.outbox.toArray();
+		expect(await target.repo.restoreRecords(backup, 'add-missing')).toEqual({
+			added: 0,
+			skipped: 4,
+			replaced: 0,
+			removed: 0,
+		});
+		expect(await target.db.outbox.toArray()).toEqual(before);
+		expect((await target.db.local_fix.get(fix.id))?.lat).toBe(45);
+	});
+
+	it('replaces records and raw fixes, tombstones extras, and queues valid ordered deletion transitions', async () => {
+		const source = fixture();
+		const live = await source.repo.create('project', { name: '第1寺院', archived_at: null });
+		const dead = await source.repo.create('project', { name: '修复洗手台', archived_at: null });
+		await source.repo.remove('project', dead.id);
+		const session = (await source.repo.start()).session;
+		const fix = {
+			id: sessionFixId(session.id, 'start'),
+			session_id: session.id,
+			kind: 'start' as const,
+			lat: 44,
+			lng: -63,
+			accuracy_m: 10,
+			captured_at: 123,
+		};
+		await source.db.local_fix.put(fix);
+		const backup = await backupOf(source.db);
+		const target = fixture();
+		await target.db.project.bulkPut([
+			{ ...live, name: 'newer', deleted_at: 200 },
+			{ ...dead, name: 'newer', deleted_at: null },
+		]);
+		const extra = await target.repo.create('project', { name: 'Extra', archived_at: null });
+		await target.db.outbox.clear();
+		await target.db.local_fix.bulkPut([
+			{ ...fix, lat: 45 },
+			{ ...fix, id: sessionFixId(session.id, 'end'), kind: 'end' },
+		]);
+		const counts = await target.repo.restoreRecords(backup, 'replace');
+		expect(counts).toEqual({ added: 1, replaced: 3, skipped: 0, removed: 2 });
+		for (const entity of ENTITIES) {
+			const actual = (await target.db.entity(entity).toArray()).filter(
+				(record) => record.id !== extra.id,
+			);
+			expect(actual).toEqual(backup.records[entity]);
+		}
+		expect((await target.db.project.get(extra.id))?.deleted_at).toBe(1000);
+		expect(await target.db.local_fix.toArray()).toEqual([fix]);
+		const queue = await target.db.outbox.toArray();
+		for (const entity of ENTITIES)
+			for (const record of backup.records[entity]) {
+				const rows = queue.filter(
+					(row) => row.mutation.entity === entity && row.mutation.record_id === record.id,
+				);
+				expect(rows.map((row) => [row.mutation.kind, row.mode])).toEqual([
+					['undelete', undefined],
+					['put', 'restore'],
+					...(record.deleted_at === null ? [] : [['delete', undefined]]),
+				]);
+				expect(rows[1]!.mutation.value).toEqual({ ...record, deleted_at: null });
+				const server =
+					record.id === live.id
+						? { ...record, deleted_at: 200 }
+						: record.id === dead.id
+							? { ...record, deleted_at: null }
+							: null;
+				let next: AnyRecord | null = server;
+				for (const row of rows)
+					next = applyMutation(next, row.mutation, { now: 1000, mode: row.mode }).next;
+				expect(next?.deleted_at !== null).toBe(record.deleted_at !== null);
+				expect(next).toMatchObject({ id: record.id, created_at: record.created_at });
+			}
+		expect(queue.at(-1)).toMatchObject({ mutation: { kind: 'delete', record_id: extra.id } });
+		expect(queue.at(-1)!.mode).toBeUndefined();
+	});
+
+	it('commits at most 500 records and their outbox rows per chunk and reports committed progress', async () => {
+		const { db, repo } = fixture();
+		const backup = await backupOf(db);
+		backup.records.project = Array.from({ length: 1001 }, (_, i) => ({
+			id: newId(),
+			rev: 0,
+			created_at: 10,
+			updated_at: 20,
+			updated_by: 'old-device',
+			deleted_at: null,
+			name: `库存管理系统开发 ${i}`,
+			archived_at: null,
+		}));
+		const progress: number[][] = [];
+		const snapshots: Promise<number[]>[] = [];
+		await repo.restoreRecords(backup, 'add-missing', (done, total) => {
+			progress.push([done, total]);
+			snapshots.push(Promise.all([db.project.count(), db.outbox.count()]));
+		});
+		expect(progress).toEqual([
+			[0, 1001],
+			[500, 1001],
+			[1000, 1001],
+			[1001, 1001],
+		]);
+		expect(await Promise.all(snapshots)).toEqual([
+			[0, 0],
+			[500, 500],
+			[1000, 1000],
+			[1001, 1001],
+		]);
+		expect(await db.project.toArray()).toEqual(
+			[...backup.records.project].sort((a, b) => a.id.localeCompare(b.id)),
+		);
+	});
+
+	it('rolls back a failed chunk together with its outbox while keeping prior chunks', async () => {
+		const { db, repo } = fixture();
+		const backup = await backupOf(db);
+		backup.records.project = Array.from({ length: 502 }, (_, i) => ({
+			id: newId(),
+			rev: 0,
+			created_at: 10,
+			updated_at: 20,
+			updated_by: 'old-device',
+			deleted_at: null,
+			name: `Project ${i}`,
+			archived_at: null,
+		}));
+		const add = db.outbox.add.bind(db.outbox);
+		vi.spyOn(db.outbox, 'add').mockImplementation((...args) => {
+			if (args[0].mutation.value?.name === 'Project 501') throw new Error('Disk full');
+			return add(...args);
+		});
+		await expect(repo.restoreRecords(backup, 'replace')).rejects.toThrow('Disk full');
+		expect(await db.project.count()).toBe(500);
+		expect(await db.outbox.count()).toBe(1000);
+		expect(await db.local.get('last_restore')).toBeUndefined();
+	});
+
+	it('validates raw fixes before writing any records and replaces raw fixes with an empty list', async () => {
+		const { db, repo } = fixture();
+		const session = (await repo.start()).session;
+		const backup = await backupOf(db);
+		const fix = {
+			id: sessionFixId(session.id, 'start'),
+			session_id: session.id,
+			kind: 'start' as const,
+			lat: 44,
+			lng: -63,
+			accuracy_m: 10,
+			captured_at: 123,
+		};
+		backup.local_fixes = [{ ...fix, id: 'bad' }];
+		const queue = await db.outbox.toArray();
+		await expect(repo.restoreRecords(backup, 'replace')).rejects.toThrow();
+		expect(await db.outbox.toArray()).toEqual(queue);
+		backup.local_fixes = [];
+		await db.local_fix.put(fix);
+		await repo.restoreRecords(backup, 'replace');
+		expect(await db.local_fix.count()).toBe(0);
 	});
 });

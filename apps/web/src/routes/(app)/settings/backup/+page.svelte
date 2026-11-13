@@ -7,6 +7,7 @@
 	import { Banner, Button, showToast } from '$lib/components';
 	import { db, prepareLocalData } from '$lib/db/app';
 	import { live } from '$lib/live.svelte';
+	import Restore from '$lib/features/backup/Restore.svelte';
 	import { backupNudge } from '$lib/features/backup';
 	import { deliverBackup, readBackup } from '$lib/features/backup/export';
 	import { apiFetch, OfflineError } from '$lib/api/client';
@@ -15,6 +16,7 @@
 
 	let now = $state(Date.now());
 	let busy = $state(false);
+	let restoring = $state(false);
 	let error = $state('');
 	let nightly = $state<{ last_nightly_at: number | null; dump: string | null } | null>(null);
 	let nightlyLoaded = $state(false);
@@ -64,7 +66,7 @@
 	});
 
 	async function download() {
-		if (busy) return;
+		if (busy) return false;
 		busy = true;
 		error = '';
 		try {
@@ -74,12 +76,14 @@
 			const file = new File([serializeBackup(backup)], backupFileName(exportedAt, tz), {
 				type: 'application/json',
 			});
-			if (!(await deliverBackup(file))) return;
+			if (!(await deliverBackup(file))) return false;
 			await db.local.put({ key: 'last_backup_at', value: exportedAt });
 			now = Date.now();
 			showToast({ message: 'Backup saved.' });
+			return true;
 		} catch {
 			error = 'The backup could not be saved. Try downloading it again.';
+			return false;
 		} finally {
 			busy = false;
 		}
@@ -122,10 +126,16 @@
 		{/if}
 	{/if}
 	{#if error}<Banner tone="danger" message={error} />{/if}
-	<Button {busy} disabled={!status.current || !!status.error} onclick={download}>
+	<Button {busy} disabled={restoring || !status.current || !!status.error} onclick={download}>
 		Download backup
 	</Button>
-	<p class="unavailable">Restoring from a backup comes with cloud sync.</p>
+	<Restore
+		saveBackup={download}
+		saveError={error}
+		disabled={busy || !status.current || !!status.error}
+		bind:restoring
+		tz={status.current?.tz ?? undefined}
+	/>
 </section>
 
 <style>
@@ -155,10 +165,5 @@
 	p {
 		margin: 0;
 		max-width: var(--ht-measure);
-	}
-
-	.unavailable {
-		font: var(--ht-type-label);
-		color: var(--ht-ink-3);
 	}
 </style>

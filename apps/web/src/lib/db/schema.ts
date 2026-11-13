@@ -7,6 +7,7 @@ export type OutboxRow = {
 	mutation: Mutation;
 	batch_id: string | null;
 	queued_at: number;
+	mode?: 'restore';
 };
 export type LocalKey =
 	| 'device_id'
@@ -15,6 +16,7 @@ export type LocalKey =
 	| 'sync_cursor'
 	| 'clock_offset_ms'
 	| 'last_backup_at'
+	| 'last_restore'
 	| 'push_state'
 	| 'capture_location'
 	| 'auth_device'
