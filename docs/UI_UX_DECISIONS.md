@@ -91,6 +91,7 @@ Decided 2026-11-13.
 
 One line per behaviour change, newest first: `YYYY-MM-DD task-id: what changed and why`.
 
+- 2026-11-13 3.4: Signed-in devices sync. The sync badge sits on Home's date line on phones and in the sidebar footer on desktop, and opens Sync details (last backup, waiting changes, Sync now, changes the cloud did not accept). Rows with unsent changes show the pending dot. A device clock more than 2 minutes off shows a caution on Home and marks sessions for review.
 - 2026-11-13 3.2: Settings > Cloud and devices: sign in with the account key or a code from another device, the device list with Revoke, Link a device (QR code, code and link, five-minute countdown), Sign out, and `/link` for the QR link. Recording never depends on being signed in.
 
 - 2026-11-12 2.4: Settings > Places: add and edit places (typed or current coordinates, radius 25-2000 m, Open in Maps link), merge duplicates with one Undo, archive places in use, delete unused ones.
