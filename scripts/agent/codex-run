@@ -342,6 +342,8 @@ echo "$phase" >"$run/phase"
 if ((rc == 0)); then
 	finish 0 "Codex finished"
 else
-	last=$(grep -v '^\s*$' "$run/stderr.log" 2>/dev/null | tail -n 1 | cut -c1-160)
+	# An empty stderr.log makes grep exit 1; under pipefail that would trip the ERR trap and
+	# misreport Codex's own failure as a setup error (121).
+	last=$({ grep -v '^\s*$' "$run/stderr.log" 2>/dev/null || true; } | tail -n 1 | cut -c1-160)
 	finish "$rc" "Codex exited $rc${last:+: $last}"
 fi
