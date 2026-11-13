@@ -122,6 +122,7 @@ test('Home review row opens a day review and fixes, marks, conflicts, and finish
 	await expect(page.getByText(/not recorded/).first()).toHaveCount(0);
 
 	await page.getByRole('button', { name: 'Mark reviewed' }).first().click();
+	await expect(page.getByText('Done (', { exact: false })).toBeVisible();
 	await page.reload();
 	await expect(page.getByText('Done (', { exact: false })).toBeVisible();
 	await page.locator('details summary').click();

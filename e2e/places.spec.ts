@@ -150,6 +150,9 @@ test('manage saved places, merge with Undo, archive, and persist', async ({
 	const archivedPlaces = page.getByRole('list', { name: 'Archived places' });
 	await expect(archivedPlaces.getByText('第一寺院')).toBeVisible();
 	await archivedPlaces.getByRole('button', { name: 'Restore' }).click();
+	// The name is still visible in the archived list until the restore is saved; wait for
+	// it to leave that list before reloading, or the reload can race the write.
+	await expect(archivedPlaces.getByText('第一寺院')).toHaveCount(0);
 	await expect(page.getByText('第一寺院')).toBeVisible();
 	await page.reload();
 	await expect(page.getByText('第一寺院')).toBeVisible();
