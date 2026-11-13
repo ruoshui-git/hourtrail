@@ -128,6 +128,8 @@ test('Home review row opens a day review and fixes, marks, conflicts, and finish
 	await page.locator('details').getByRole('button', { name: 'Undo' }).first().click();
 	await expect(page.getByRole('button', { name: 'Mark reviewed' }).first()).toBeVisible();
 	await page.getByRole('button', { name: 'Dismiss' }).first().click();
+	// Wait for the dismissal to be saved (it moves into Done) before reloading.
+	await expect(page.getByText('Done (', { exact: false })).toBeVisible();
 	await page.reload();
 	await page.locator('details summary').click();
 	await expect(page.locator('details').getByRole('button', { name: 'Undo' }).first()).toBeVisible();
