@@ -80,6 +80,13 @@ Decided 2026-11-13.
 - Progress for large files: "Restoring… 1,200 of 3,400" with no cancel (each chunk is atomic; a closed app resumes from the outbox).
 - Works signed out (local only; the changes upload after sign-in) and signed in.
 
+## Raw coordinates and erasing the cloud (task 3.7)
+
+Decided 2026-11-13.
+
+- **Settings → Privacy** gains a switch "Back up raw coordinates" (synced setting `sync_raw_gps`, off by default) under the capture switch, with the note "When this is off, raw coordinates stay on the device that captured them, so a place that wasn't recognized can only be named on that device." Turning it on uploads this device's raw coordinates, and later captures sync. Turning it off keeps new captures on the device and shows "Delete raw coordinates from the cloud". That button confirms with "Delete raw coordinates from the cloud? Named places and session places stay. This device keeps its own copy." Afterwards the cloud and other devices hold no raw coordinates; nightly backups already taken keep them for up to 60 days, and the note under the button says so.
+- **Settings → Cloud and devices → Erase cloud data** (signed in; danger button at the end of the page) opens a sheet: "This deletes every record and every device from the cloud. All devices are signed out. Nightly backups already taken stay in the backups repository for up to 60 days." Account key field (required), and a checkbox "Also erase this device" (off). The button "Erase cloud data" stays disabled until the key field is filled. A wrong key shows "That account key does not match." and counts toward the same lockout as sign-in. On success, signed out with "Cloud data erased." If the checkbox was on, the app also deletes this device's data and reloads to a fresh start.
+
 ## Changelog
 
 One line per behaviour change, newest first: `YYYY-MM-DD task-id: what changed and why`.
