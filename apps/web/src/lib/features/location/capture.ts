@@ -1,7 +1,8 @@
 import { db, repo } from '$lib/db/app';
-import { chooseFix, GOOD_FIX_ACCURACY_M, matchPlace, type Fix } from '@hourtrail/core';
+import { chooseFix, GOOD_FIX_ACCURACY_M, matchPlace, readSetting, type Fix } from '@hourtrail/core';
 import type { RecordOf } from '@hourtrail/core';
 import { fixDecidesPlace } from './domain';
+import { saveCapturedFix } from './raw-gps';
 
 type CapturedFix = Fix & { captured_at: number };
 
@@ -71,7 +72,8 @@ export async function captureFor(sessionId: string, kind: 'start' | 'end'): Prom
 			await repo.update('session', sessionId, { place_state: 'unresolved', place_candidates: [] });
 			return;
 		}
-		await db.local_fix.put({ id: `${sessionId}:${kind}`, session_id: sessionId, kind, ...fix });
+		const rawSync = readSetting('sync_raw_gps', (await db.setting.get('sync_raw_gps'))?.value);
+		await saveCapturedFix(db, repo, { session_id: sessionId, kind, ...fix }, rawSync);
 		if (coordinatesRemoved.has(sessionId)) {
 			await db.local_fix.delete(`${sessionId}:${kind}`);
 			return;

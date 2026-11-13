@@ -1,5 +1,6 @@
 import {
 	devicesResponseSchema,
+	eraseAccountRequestSchema,
 	enrollRequestSchema,
 	linkFinishRequestSchema,
 	linkStartResponseSchema,
@@ -133,6 +134,21 @@ class AuthState {
 			if (error instanceof ApiError && error.status === 401) this.handleUnauthorized();
 			throw error;
 		}
+		this.device = null;
+		this.devices = [];
+		this.status = 'signed-out';
+		this.signedOutBy401 = false;
+		this.revision += 1;
+		await db.local.delete(AUTH_DEVICE_KEY);
+	}
+
+	async eraseCloud(key: string) {
+		const payload = eraseAccountRequestSchema.parse({ account_key: key });
+		await apiFetch('/api/account/erase', {
+			method: 'POST',
+			body: payload,
+			schema: emptyResponseSchema,
+		});
 		this.device = null;
 		this.devices = [];
 		this.status = 'signed-out';

@@ -7,6 +7,7 @@ export * from './api/errors';
 export * from './api/auth';
 export * from './api/sync';
 export * from './api/backup';
+export * from './api/account';
 export * from './blaze';
 export * from './ids';
 export * from './schema';

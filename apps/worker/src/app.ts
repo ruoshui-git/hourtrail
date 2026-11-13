@@ -3,6 +3,7 @@ import type { AppEnv } from './env';
 import { ApiError, errorResponse, onError } from './errors';
 import { apiHeadersMiddleware, bodyLimit, requestId, sameOriginJson } from './middleware';
 import { auth } from './routes/auth';
+import { account } from './routes/account';
 import { backup } from './routes/backup';
 import { health } from './routes/health';
 import { sync } from './routes/sync';
@@ -13,6 +14,7 @@ export function createApp(): Hono<AppEnv> {
 	app.onError(onError);
 	app.route('/api/health', health);
 	app.route('/api/auth', auth);
+	app.route('/api/account', account);
 	app.route('/api/backup', backup);
 	app.route('/api/sync', sync);
 	app.notFound((c) => {

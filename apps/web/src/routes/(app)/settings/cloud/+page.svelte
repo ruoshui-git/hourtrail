@@ -17,6 +17,7 @@
 	} from '$lib/components';
 	import SyncControl from '$lib/features/sync/ui/SyncControl.svelte';
 	import { auth } from '$lib/features/cloud/auth.svelte';
+	import { db } from '$lib/db/app';
 	import {
 		formatLastSeen,
 		guessDeviceName,
@@ -39,6 +40,12 @@
 	let revokeTarget = $state<{ id: string; name: string } | null>(null);
 	let revokeOpen = $state(false);
 	let signOutOpen = $state(false);
+	let eraseOpen = $state(false);
+	let eraseKey = $state('');
+	let eraseError = $state('');
+	let eraseBusy = $state(false);
+	let eraseThisDevice = $state(false);
+	let erasedMessage = $state('');
 	let refreshError = $state('');
 	const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 	let seconds = $derived(Math.min(300, Math.max(0, Math.ceil((expiresAt - now) / 1000))));
@@ -130,6 +137,34 @@
 				cause instanceof OfflineError ? cause.message : 'Could not create a link code. Try again.';
 		}
 	}
+	async function eraseCloud() {
+		eraseError = '';
+		eraseBusy = true;
+		try {
+			await auth.eraseCloud(eraseKey);
+			eraseOpen = false;
+			erasedMessage = 'Cloud data erased.';
+			if (eraseThisDevice) {
+				db.close();
+				await new Promise<void>((resolve, reject) => {
+					const request = indexedDB.deleteDatabase('hourtrail');
+					request.onsuccess = () => resolve();
+					request.onerror = () => reject(request.error);
+					request.onblocked = () => reject(new Error('Database deletion was blocked.'));
+				});
+				location.assign('/');
+			}
+		} catch (cause) {
+			if (cause instanceof ApiError && cause.status === 401)
+				eraseError = 'That account key does not match.';
+			else if (cause instanceof ApiError && cause.code === 'locked')
+				eraseError = lockoutMessage(Number(cause.details?.retry_after_s ?? 900));
+			else if (cause instanceof OfflineError) eraseError = cause.message;
+			else eraseError = 'Could not erase cloud data. Try again.';
+		} finally {
+			eraseBusy = false;
+		}
+	}
 </script>
 
 <svelte:head><title>Cloud and devices · Settings · Hourtrail</title></svelte:head>
@@ -143,6 +178,7 @@
 		tone="caution"
 		message="You were signed out. Sign in again to back up your records."
 	/>{/if}
+{#if erasedMessage}<p role="status">{erasedMessage}</p>{/if}
 {#if auth.status !== 'signed-in'}
 	<p class="intro">On this device only. Sign in to back up and sync your records.</p>
 	<SegmentedControl
@@ -219,7 +255,40 @@
 			onclick={() => (signOutOpen = true)}>Sign out</Button
 		>
 	</div>
+	<section class="danger-zone" aria-label="Erase cloud data">
+		<h2>Erase cloud data</h2>
+		<p>This deletes every record and every device from the cloud.</p>
+		<Button variant="danger" onclick={() => (eraseOpen = true)}>Erase cloud data</Button>
+	</section>
 {/if}
+
+<Sheet bind:open={eraseOpen} title="Erase cloud data">
+	<p class="erase-copy">
+		This deletes every record and every device from the cloud. All devices are signed out. Nightly
+		backups already taken stay in the backups repository for up to 60 days.
+	</p>
+	<Field label="Account key" error={eraseError}>
+		{#snippet children(props)}<input
+				{...props}
+				class="key-input"
+				bind:value={eraseKey}
+				autocomplete="off"
+				autocorrect="off"
+				autocapitalize="none"
+				spellcheck="false"
+			/>{/snippet}
+	</Field>
+	<label class="erase-device">
+		<input type="checkbox" bind:checked={eraseThisDevice} />
+		<span>Also erase this device</span>
+	</label>
+	{#snippet footer()}
+		<Button variant="secondary" onclick={() => (eraseOpen = false)}>Cancel</Button>
+		<Button variant="danger" disabled={!eraseKey} busy={eraseBusy} onclick={() => void eraseCloud()}
+			>Erase cloud data</Button
+		>
+	{/snippet}
+</Sheet>
 
 <Sheet
 	bind:open={linkOpen}
@@ -326,6 +395,39 @@
 
 	section {
 		max-width: var(--ht-content-max);
+	}
+
+	.danger-zone {
+		margin-top: var(--ht-space-6);
+		padding-top: var(--ht-space-4);
+		border-top: var(--ht-hairline) solid var(--ht-line);
+	}
+
+	.danger-zone h2 {
+		margin: 0 0 var(--ht-space-2);
+		font: var(--ht-type-heading);
+		color: var(--ht-ink);
+	}
+
+	.danger-zone p,
+	.erase-copy {
+		max-width: var(--ht-measure);
+		color: var(--ht-ink-2);
+		font: var(--ht-type-body);
+	}
+
+	.erase-device {
+		display: flex;
+		align-items: center;
+		gap: var(--ht-space-2);
+		min-height: var(--ht-target);
+		font: var(--ht-type-body);
+	}
+
+	.erase-device input {
+		width: var(--ht-icon);
+		height: var(--ht-icon);
+		accent-color: var(--ht-ink);
 	}
 
 	.device {
