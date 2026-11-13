@@ -3,7 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { onDestroy } from 'svelte';
-	import { ArrowLeft } from '@lucide/svelte';
+	import { ChevronLeft } from '@lucide/svelte';
 	import { sessionMinutes } from '@hourtrail/core';
 	import { db, repo } from '$lib/db/app';
 	import { live } from '$lib/live.svelte';
@@ -107,7 +107,7 @@
 
 <svelte:head><title>{data.current.item?.name ?? 'Work item'} · Hourtrail</title></svelte:head>
 {#if data.current.item}
-	<Button variant="quiet" icon={ArrowLeft} onclick={() => goto(resolve('/items'))}>Items</Button>
+	<Button variant="quiet" icon={ChevronLeft} onclick={() => goto(resolve('/items'))}>Items</Button>
 	<header>
 		<h1>{data.current.item.name}</h1>
 		{#if saved}<p role="status">Saved</p>{/if}
@@ -181,6 +181,7 @@
 
 <style>
 	h1 {
+		margin: 0;
 		font: var(--ht-type-title);
 		overflow-wrap: anywhere;
 	}
@@ -193,7 +194,9 @@
 	header {
 		display: flex;
 		align-items: center;
+		justify-content: space-between;
 		gap: var(--ht-space-3);
+		max-width: var(--ht-content-max);
 	}
 
 	header p {
@@ -209,10 +212,12 @@
 	}
 
 	section {
+		max-width: var(--ht-content-max);
 		margin-block: var(--ht-space-6);
 	}
 
 	section > p {
+		max-width: var(--ht-measure);
 		font: var(--ht-type-body);
 	}
 

@@ -20,7 +20,7 @@
 </script>
 
 <svelte:head><title>Settings · Hourtrail</title></svelte:head>
-<h1>Settings</h1>
+<header><h1>Settings</h1></header>
 <nav aria-label="Settings">
 	{#each sections as section (section)}
 		{#if section === 'Activity types'}
@@ -74,6 +74,16 @@
 		margin: 0 0 var(--ht-space-5);
 		font: var(--ht-type-title);
 		color: var(--ht-ink);
+	}
+
+	header {
+		max-width: var(--ht-content-max);
+	}
+
+	@media (width >= 1024px) {
+		h1 {
+			max-width: var(--ht-content-max);
+		}
 	}
 
 	nav {

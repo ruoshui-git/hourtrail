@@ -249,6 +249,7 @@
 
 <svelte:head><title>History · Hourtrail</title></svelte:head>
 <section class:two-pane={desktop} class="history">
+	{#if desktop}<a class="skip-editor" href="#history-editor">Skip to session editor</a>{/if}
 	<div class="left-pane">
 		<div class="search-controls">
 			<label class="search-label"
@@ -308,6 +309,7 @@
 			</div>
 		</div>
 		{#if filtered}
+			<h1 class="results-title">Search results</h1>
 			<div class="result-summary">
 				{searchResult.sessions.length}
 				{searchResult.sessions.length === 1 ? 'session' : 'sessions'}, {formatMinutes(
@@ -340,7 +342,10 @@
 									}}
 									><td
 										><button class="result-button" onclick={() => selectSession(session.id)}
-											>{dayOf(session.start_at, data.current.zone)}</button
+											>{new Intl.DateTimeFormat(undefined, {
+												dateStyle: 'medium',
+												timeZone: data.current.zone,
+											}).format(session.start_at)}</button
 										></td
 									><td
 										>{new Intl.DateTimeFormat(undefined, {
@@ -418,7 +423,12 @@
 			{/if}
 		{/if}
 	</div>
-	{#if desktop}<aside class="editor-pane">
+	{#if desktop}<aside
+			id="history-editor"
+			tabindex="-1"
+			class="editor-pane"
+			aria-label="Session editor"
+		>
 			{#if selectedId}
 				<div class="editor-heading">
 					<h2>Edit session</h2>
@@ -434,11 +444,32 @@
 
 <style>
 	.history {
+		position: relative;
 		display: grid;
 
 		/* minmax(0, 1fr): never let a wide child widen the page past the gutter. */
 		grid-template-columns: minmax(0, 1fr);
 		gap: var(--ht-space-4);
+	}
+
+	.results-title {
+		margin: 0;
+		font: var(--ht-type-title);
+	}
+
+	.skip-editor {
+		position: absolute;
+		inset-block-start: 0;
+		inset-inline-start: 0;
+		transform: translateY(-200%);
+		padding: var(--ht-space-2) var(--ht-space-3);
+		border-radius: var(--ht-radius-control);
+		background: var(--ht-paper);
+		color: var(--ht-ink);
+	}
+
+	.skip-editor:focus {
+		transform: translateY(0);
 	}
 
 	.two-pane {
@@ -504,6 +535,11 @@
 		flex-wrap: wrap;
 		align-items: end;
 		gap: var(--ht-space-2);
+	}
+
+	.filters > :global(button),
+	.presets :global(button) {
+		min-height: var(--ht-control-height);
 	}
 
 	.result-summary {

@@ -12,6 +12,7 @@
 	import { page } from '$app/state';
 	import { formatMinutes } from '$lib/format';
 	import { goto } from '$app/navigation';
+	import { ChevronLeft } from '@lucide/svelte';
 	import { resolve } from '$app/paths';
 	import {
 		Banner,
@@ -258,8 +259,11 @@
 <section class="review-screen">
 	<header>
 		<div>
-			<Button variant="quiet" size="sm" onclick={() => goto(resolve(`/history?day=${day}`))}
-				>History</Button
+			<Button
+				variant="quiet"
+				size="sm"
+				icon={ChevronLeft}
+				onclick={() => goto(resolve(`/history?day=${day}`))}>History</Button
 			>
 			<h1>{title}</h1>
 		</div>
@@ -350,8 +354,14 @@
 	}
 
 	header h1 {
-		margin: var(--ht-space-1) 0 0;
+		margin: 0;
 		font: var(--ht-type-title);
+	}
+
+	header > div {
+		display: flex;
+		align-items: center;
+		gap: var(--ht-space-3);
 	}
 
 	header nav {

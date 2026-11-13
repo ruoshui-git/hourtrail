@@ -1,5 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
+	import { ChevronLeft } from '@lucide/svelte';
 	import Button from '$lib/components/Button.svelte';
 	import Switch from '$lib/components/Switch.svelte';
 	import { db } from '$lib/db/app';
@@ -53,8 +56,13 @@
 	}
 </script>
 
-<svelte:head><title>Privacy · Hourtrail</title></svelte:head>
-<h1>Privacy</h1>
+<svelte:head><title>Privacy · Settings · Hourtrail</title></svelte:head>
+<header>
+	<Button variant="quiet" icon={ChevronLeft} onclick={() => goto(resolve('/settings'))}
+		>Settings</Button
+	>
+	<h1>Privacy</h1>
+</header>
 <section class="settings-card">
 	<Switch
 		label="Capture location on Start and Stop"
@@ -79,9 +87,17 @@
 
 <style>
 	h1 {
-		margin: 0 0 var(--ht-space-5);
+		margin: 0;
 		font: var(--ht-type-title);
 		color: var(--ht-ink);
+	}
+
+	header {
+		display: flex;
+		align-items: center;
+		gap: var(--ht-space-3);
+		max-width: var(--ht-content-max);
+		margin-bottom: var(--ht-space-5);
 	}
 
 	.settings-card {
@@ -94,5 +110,6 @@
 
 	.settings-card p {
 		margin: 0;
+		max-width: var(--ht-measure);
 	}
 </style>

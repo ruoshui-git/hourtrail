@@ -479,13 +479,15 @@
 </script>
 
 <svelte:head><title>Today · Hourtrail</title></svelte:head>
-<h1>
-	{new Intl.DateTimeFormat(undefined, {
-		weekday: 'short',
-		day: 'numeric',
-		month: 'short',
-	}).format(now)}
-</h1>
+<header class="page-header">
+	<h1>
+		{new Intl.DateTimeFormat(undefined, {
+			weekday: 'short',
+			day: 'numeric',
+			month: 'short',
+		}).format(now)}
+	</h1>
+</header>
 
 <div class="home-grid">
 	<section class="summary" aria-label="Today">
@@ -749,6 +751,15 @@
 </Sheet>
 
 <style>
+	.page-header {
+		margin-bottom: var(--ht-space-4);
+	}
+
+	h1 {
+		margin: 0;
+		font: var(--ht-type-title);
+	}
+
 	.status {
 		font: var(--ht-type-body-strong);
 		color: var(--ht-ink-2);

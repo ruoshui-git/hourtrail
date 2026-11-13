@@ -268,10 +268,12 @@
 		justify-content: space-between;
 		align-items: center;
 		gap: var(--ht-space-4);
+		max-width: var(--ht-content-max);
 		margin-bottom: var(--ht-space-5);
 	}
 
 	h1 {
+		margin: 0;
 		font: var(--ht-type-title);
 	}
 
@@ -286,6 +288,7 @@
 	}
 
 	section {
+		max-width: var(--ht-content-max);
 		margin-block: var(--ht-space-5);
 	}
 

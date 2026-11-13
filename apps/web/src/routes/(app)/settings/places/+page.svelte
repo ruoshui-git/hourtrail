@@ -1,8 +1,9 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { DEFAULT_PLACE_RADIUS_M } from '@hourtrail/core';
 	import type { RecordOf } from '@hourtrail/core';
-	import { ArrowLeft } from '@lucide/svelte';
+	import { ChevronLeft } from '@lucide/svelte';
 	import {
 		Button,
 		Field,
@@ -150,8 +151,10 @@
 </script>
 
 <svelte:head><title>Places · Settings · Hourtrail</title></svelte:head>
-<a class="back" href={resolve('/settings')}><ArrowLeft aria-hidden="true" />Settings</a>
 <header>
+	<Button variant="quiet" icon={ChevronLeft} onclick={() => goto(resolve('/settings'))}
+		>Settings</Button
+	>
 	<h1>Places</h1>
 	<Button onclick={() => reset()}>Add place</Button>
 </header>
@@ -241,26 +244,12 @@
 </Sheet>
 
 <style>
-	.back {
-		display: inline-flex;
-		align-items: center;
-		gap: var(--ht-space-2);
-		min-height: var(--ht-target);
-		color: var(--ht-ink-2);
-		font: var(--ht-type-label);
-		text-decoration: none;
-	}
-
-	.back :global(svg) {
-		width: var(--ht-icon);
-		height: var(--ht-icon);
-	}
-
 	header {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
 		gap: var(--ht-space-3);
+		max-width: var(--ht-content-max);
 		margin: var(--ht-space-3) 0 var(--ht-space-5);
 	}
 

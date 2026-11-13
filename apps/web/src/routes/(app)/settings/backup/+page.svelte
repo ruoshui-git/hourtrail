@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
+	import { ChevronLeft } from '@lucide/svelte';
 	import { backupFileName, readSetting, serializeBackup } from '@hourtrail/core';
 	import { Banner, Button, showToast } from '$lib/components';
 	import { db, prepareLocalData } from '$lib/db/app';
@@ -59,8 +61,12 @@
 </script>
 
 <svelte:head><title>Backup · Settings · Hourtrail</title></svelte:head>
-<a href={resolve('/settings')}>Settings</a>
-<h1>Backup</h1>
+<header>
+	<Button variant="quiet" icon={ChevronLeft} onclick={() => goto(resolve('/settings'))}
+		>Settings</Button
+	>
+	<h1>Backup</h1>
+</header>
 <section aria-label="Backup">
 	<p>
 		A backup file holds everything on this device. Keep it somewhere safe, such as Files or your
@@ -87,16 +93,16 @@
 </section>
 
 <style>
-	a {
-		display: inline-flex;
+	header {
+		display: flex;
 		align-items: center;
-		min-height: var(--ht-target);
-		color: var(--ht-ink-2);
-		font: var(--ht-type-label);
+		gap: var(--ht-space-3);
+		max-width: var(--ht-content-max);
+		margin-bottom: var(--ht-space-5);
 	}
 
 	h1 {
-		margin: var(--ht-space-3) 0 var(--ht-space-5);
+		margin: 0;
 		font: var(--ht-type-title);
 		color: var(--ht-ink);
 	}
@@ -112,6 +118,7 @@
 
 	p {
 		margin: 0;
+		max-width: var(--ht-measure);
 	}
 
 	.unavailable {

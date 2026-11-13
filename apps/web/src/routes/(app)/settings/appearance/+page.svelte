@@ -1,7 +1,9 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { SegmentedControl } from '$lib/components';
+	import { ChevronLeft } from '@lucide/svelte';
+	import { Button, SegmentedControl } from '$lib/components';
 	import { getTheme, setLocal } from '$lib/features/settings/local';
 	import { applyTheme, type ThemeChoice } from '$lib/theme';
 	let theme = $state<ThemeChoice>('system');
@@ -22,26 +24,30 @@
 </script>
 
 <svelte:head><title>Appearance · Settings · Hourtrail</title></svelte:head>
-<a href={resolve('/settings')}>Settings</a>
-<h1>Appearance</h1>
+<header>
+	<Button variant="quiet" icon={ChevronLeft} onclick={() => goto(resolve('/settings'))}
+		>Settings</Button
+	>
+	<h1>Appearance</h1>
+</header>
 <section aria-label="Appearance">
 	<h2>Theme</h2>
 	<SegmentedControl bind:value={theme} label="Theme" {options} />
 </section>
 
 <style>
-	a {
-		display: inline-flex;
-		align-items: center;
-		min-height: var(--ht-target);
-		color: var(--ht-ink-2);
-		font: var(--ht-type-label);
-	}
-
 	h1 {
-		margin: var(--ht-space-3) 0 var(--ht-space-5);
+		margin: 0;
 		font: var(--ht-type-title);
 		color: var(--ht-ink);
+	}
+
+	header {
+		display: flex;
+		align-items: center;
+		gap: var(--ht-space-3);
+		max-width: var(--ht-content-max);
+		margin-bottom: var(--ht-space-5);
 	}
 
 	section {

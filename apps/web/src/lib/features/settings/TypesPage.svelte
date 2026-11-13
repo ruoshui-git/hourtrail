@@ -1,10 +1,11 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
 	import { BLAZE_KEYS } from '@hourtrail/core';
 	import { patchMutation } from '@hourtrail/core';
 	import type { BlazeKey, RecordOf } from '@hourtrail/core';
-	import { ArrowLeft } from '@lucide/svelte';
+	import { ChevronLeft } from '@lucide/svelte';
 	import {
 		Blaze,
 		Button,
@@ -154,8 +155,10 @@
 </script>
 
 <svelte:head><title>Activity types · Settings · Hourtrail</title></svelte:head>
-<a class="back" href={resolve('/settings')}><ArrowLeft aria-hidden="true" />Settings</a>
 <header>
+	<Button variant="quiet" icon={ChevronLeft} onclick={() => goto(resolve('/settings'))}
+		>Settings</Button
+	>
 	<h1>Activity types</h1>
 	<Button onclick={openAdd}>Add activity type</Button>
 </header>
@@ -241,27 +244,13 @@
 </Sheet>
 
 <style>
-	.back {
-		display: inline-flex;
-		align-items: center;
-		gap: var(--ht-space-2);
-		min-height: var(--ht-target);
-		color: var(--ht-ink-2);
-		font: var(--ht-type-label);
-		text-decoration: none;
-	}
-
-	.back :global(svg) {
-		width: var(--ht-icon);
-		height: var(--ht-icon);
-	}
-
 	header {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
 		flex-wrap: wrap;
 		gap: var(--ht-space-3);
+		max-width: var(--ht-content-max);
 		margin: var(--ht-space-3) 0 var(--ht-space-4);
 	}
 
