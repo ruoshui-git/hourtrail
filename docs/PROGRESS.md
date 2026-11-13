@@ -67,6 +67,8 @@ Gate 2 status (2026-11-12): automated part passed (scenario E with mocked geoloc
 
 **Gate 3:** scenarios G, H, I, L; duplicate and replayed batches create nothing twice; an offline edit on each device to the same field produces one winner and one conflict record; unauthenticated and revoked-device requests get 401; restore drill passes from both a backup file and a nightly dump; CPU per request is under the limit. Then the owner runs `setup-account` and `setup-backup-key` for production and approves the production deploy; the phone's existing local data uploads on first sign-in.
 
+**Gate 3 status (2026-11-13):** automated part passed and production deployed (512f5e1). Scenarios G, H, L and the sync and backup parts of I pass on Chromium (WebKit cannot take the Secure cookie on the HTTP test origin; covered by the owner's iPhone check). Replays and races create nothing twice; same-field offline edits give one winner and one conflict; signed-out and revoked requests get 401; restore passes from a backup file (scenario L) and a nightly dump (staging drill). CPU: pushes 2–9 ms, 11 ms for a fresh isolate's first push (SPEC platform limits). The owner ran setup-account for production; the production backup key was set up 2026-11-12. Remaining for the owner: sign in on the iPhone (the phone's existing data uploads) and the airplane-mode check.
+
 ## Milestone 4: reporting and reminders
 
 | ID  | Task                                                                                                                                                | Who                      | Status                                                                  |
