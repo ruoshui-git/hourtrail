@@ -12,7 +12,7 @@
 // To pause on purpose (waiting on the owner), write the reason to .agent-runs/PAUSE;
 // delete it when work resumes.
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync, readlinkSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, readlinkSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -60,6 +60,17 @@ const inRepo = (pid) => {
 	}
 };
 if (pids.some(inRepo)) process.exit(0);
+
+// Claude subagents (the Haiku fallback in docs/agents/codex.md) are not processes this hook can
+// see. Their launcher writes .agent-runs/NAME/subagent-running and deletes it when the subagent
+// reports; a marker younger than three hours counts as work in flight.
+try {
+	const runsDir = join(repo, '.agent-runs');
+	for (const name of readdirSync(runsDir)) {
+		const marker = join(runsDir, name, 'subagent-running');
+		if (existsSync(marker) && Date.now() - statSync(marker).mtimeMs < 3 * 3600_000) process.exit(0);
+	}
+} catch {}
 
 const progress = readFileSync(join(repo, 'docs/PROGRESS.md'), 'utf8');
 const todo = progress
