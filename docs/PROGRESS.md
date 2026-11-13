@@ -54,16 +54,16 @@ Gate 2 status (2026-11-12): automated part passed (scenario E with mocked geoloc
 
 ## Milestone 3: cloud
 
-| ID  | Task                                                                                        | Who                                | Status |
-| --- | ------------------------------------------------------------------------------------------- | ---------------------------------- | ------ |
-| 3.1 | Worker skeleton: Hono, D1 migrations, security headers, error shape                         | Sol high                           | todo   |
-| 3.2 | Auth endpoints, lockout, cookies; sign-in, link-device and devices screens; `setup-account` | Sol high, plus `codex exec review` | todo   |
-| 3.3 | Sync push and pull with idempotency, concurrency and merge tests                            | Sol high, plus `codex exec review` | todo   |
-| 3.4 | Client sync engine, SyncBadge and details, conflict surfacing in review                     | Sol high                           | todo   |
-| 3.5 | Restore from a backup file (both modes)                                                     | Luna high                          | todo   |
-| 3.6 | `hourtrail-backups` repo, nightly workflow, `setup-backup-key`, `restore-drill`, heartbeat  | Luna medium ∥                      | todo   |
-| 3.7 | Erase account, raw-coordinate sync toggle and cloud deletion                                | Luna medium                        | todo   |
-| 3.8 | Two-device E2E (two browser contexts against `wrangler dev`): scenarios G, H, I, L          | Luna high                          | todo   |
+| ID  | Task                                                                                        | Who                                | Status            |
+| --- | ------------------------------------------------------------------------------------------- | ---------------------------------- | ----------------- |
+| 3.1 | Worker skeleton: Hono, D1 migrations, security headers, error shape                         | Sol high                           | active (Sol high) |
+| 3.2 | Auth endpoints, lockout, cookies; sign-in, link-device and devices screens; `setup-account` | Sol high, plus `codex exec review` | todo              |
+| 3.3 | Sync push and pull with idempotency, concurrency and merge tests                            | Sol high, plus `codex exec review` | todo              |
+| 3.4 | Client sync engine, SyncBadge and details, conflict surfacing in review                     | Sol high                           | todo              |
+| 3.5 | Restore from a backup file (both modes)                                                     | Luna high                          | todo              |
+| 3.6 | `hourtrail-backups` repo, nightly workflow, `setup-backup-key`, `restore-drill`, heartbeat  | Luna medium ∥                      | todo              |
+| 3.7 | Erase account, raw-coordinate sync toggle and cloud deletion                                | Luna medium                        | todo              |
+| 3.8 | Two-device E2E (two browser contexts against `wrangler dev`): scenarios G, H, I, L          | Luna high                          | todo              |
 
 **Gate 3:** scenarios G, H, I, L; duplicate and replayed batches create nothing twice; an offline edit on each device to the same field produces one winner and one conflict record; unauthenticated and revoked-device requests get 401; restore drill passes from both a backup file and a nightly dump; CPU per request is under the limit. Then the owner runs `setup-account` and `setup-backup-key` for production and approves the production deploy; the phone's existing local data uploads on first sign-in.
 
