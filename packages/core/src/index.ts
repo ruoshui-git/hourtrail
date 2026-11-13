@@ -9,6 +9,7 @@ export * from './schema';
 export * from './time';
 export * from './places';
 export * from './sessions';
+export * from './review';
 export * from './sync/mutation';
 export * from './sync/apply';
 export * from './backup';
