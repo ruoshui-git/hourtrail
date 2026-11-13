@@ -47,6 +47,18 @@ Work item picker, type, start and end (`datetime-local`), computed duration, not
 - **Reports**: a segmented range control, the headline figure "Work hours" with other types beside it, the bar chart by day, breakdown tabs (Work items, Projects, Places), then "Create report", which opens the report builder with a live print preview and Export (Print, CSV, Excel).
 - **Settings**: Activity types (reorder, colour, counts as work, reminders, archive), Places, Reminders, Cloud and devices (sync state, link a device, revoke), Privacy (location capture, raw coordinates), Backup (download, restore, last nightly backup), Appearance (system, light, dark), Time zone and week start, Deleted sessions, About.
 
+## Cloud and devices (Settings → Cloud and devices, `/settings/cloud`; `/link`)
+
+Decided 2026-11-13 for task 3.2. Recording never depends on being signed in: every state below keeps Start and Stop working locally.
+
+- **Signed out** (never signed in, signed out, or the server answered 401): a line "On this device only. Sign in to back up and sync your records." and two forms, one visible at a time through a segmented control: **Account key** (key field, device name, "Sign in") and **Code from another device** (code field `XXXX-XXXX`, device name, "Link this device"). The key field turns off autocorrect, autocapitalize and spellcheck and accepts the key with or without dashes and spaces. The device name is prefilled with a guess ("iPhone", "iPad", "Mac", "Windows PC", "Android phone", otherwise "This device") and accepts any Unicode, up to 60 characters.
+- **Errors** appear inline under the form, never as a toast: wrong key "That account key does not match."; bad code "That code is not valid. Codes work once, for five minutes."; lockout "Too many attempts. Try again in 15 minutes." (minutes from the server, rounded up); offline "You're offline. Sign in when you have a connection."
+- **Signed in**: "Signed in as {device name}", then the devices list: name, "This device" for the current one, "Last seen" as a relative day and time ("Today, 9:41 AM", "Yesterday, 6:02 PM", otherwise the date). Every other device has "Revoke", confirmed with "Revoke {name}? It will be signed out and stop syncing. Its records stay on that device." Then "Link a device" and "Sign out".
+- **Link a device** opens a sheet: a QR code (ink on paper, both themes), the code in large type as `XXXX-XXXX`, the link as selectable text, and "Expires in 4:59", counting down. When it expires: "This code has expired." with "New code". The QR encodes `{origin}/link#XXXX-XXXX`. The code sits in the fragment, so it never reaches server logs or a Referer header.
+- **`/link`** (opened from the QR code or link): "Link this device" with the code prefilled from the fragment, which is removed from the address bar at once, plus the device name and "Link this device". On success it goes to `/settings/cloud`. If the device is already signed in it says "This device is already signed in as {name}." and links to Settings.
+- **Sign out** confirms: "Sign out of this device? Your records stay here. New changes stay on this device until you sign in again."
+- A 401 from any request flips the app to signed out and shows a banner on Settings → Cloud and devices: "You were signed out. Sign in again to back up your records." The last known signed-in device is kept on the device, so opening the app offline does not show "signed out".
+
 ## Changelog
 
 One line per behaviour change, newest first: `YYYY-MM-DD task-id: what changed and why`.
