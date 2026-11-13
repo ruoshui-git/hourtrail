@@ -292,7 +292,12 @@ fingerprint() ( # changes whenever the worktree's content changes; never fails
 	exit 0
 )
 fresh() { # fresh FILE SECONDS: file exists and was touched within SECONDS
-	[[ -f $1 ]] && (($(date +%s) - $(stat -c %Y "$1") <= $2))
+	# Heartbeat files are deleted by their writers at any moment, so a check-then-stat can race;
+	# a file that vanishes counts as not fresh instead of tripping the ERR trap (which once killed
+	# a healthy run).
+	local mtime
+	mtime=$(stat -c %Y "$1" 2>/dev/null) || return 1
+	(($(date +%s) - mtime <= $2))
 }
 start=$(date +%s)
 last_event=$start
