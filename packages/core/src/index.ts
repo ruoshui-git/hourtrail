@@ -19,3 +19,4 @@ export * from './sync/mutation';
 export * from './sync/apply';
 export * from './backup';
 export * from './report';
+export * from './export';
