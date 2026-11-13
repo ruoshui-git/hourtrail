@@ -91,6 +91,8 @@ Decided 2026-11-13.
 
 One line per behaviour change, newest first: `YYYY-MM-DD task-id: what changed and why`.
 
+- 2026-11-13 3.7: Settings > Privacy can back up raw coordinates (off by default) and delete them from the cloud (scrubbed, then deleted; this device keeps a copy). Settings > Cloud and devices can erase all cloud data with the account key, optionally wiping this device.
+- 2026-11-13 3.5: Settings > Backup can restore a backup file: "Add what's missing", or "Replace everything" after saving a backup of this device and typing `replace`. Polish note for 4.6: the summary lists zero counts too.
 - 2026-11-13 3.4: Signed-in devices sync. The sync badge sits on Home's date line on phones and in the sidebar footer on desktop, and opens Sync details (last backup, waiting changes, Sync now, changes the cloud did not accept). Rows with unsent changes show the pending dot. A device clock more than 2 minutes off shows a caution on Home and marks sessions for review.
 - 2026-11-13 3.2: Settings > Cloud and devices: sign in with the account key or a code from another device, the device list with Revoke, Link a device (QR code, code and link, five-minute countdown), Sign out, and `/link` for the QR link. Recording never depends on being signed in.
 
