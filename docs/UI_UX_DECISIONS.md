@@ -69,6 +69,17 @@ Decided 2026-11-13. Words and states follow SPEC "What the user sees"; this sect
 - **Pending dots**: session rows in History and Home's Recent list, and work item rows, show the existing hollow pending dot (`pending` prop, aria-label "Not backed up yet") while that record has a change in the outbox.
 - **Clock caution**: when the stored server clock offset exceeds 2 minutes, Home shows a caution banner under the date line: "This device's clock is {N} minutes {ahead|behind}. Sessions started or stopped now are marked for review." Sessions started or stopped while the caution applies get `flags.clock_suspect`, which Daily review already lists as "Check session times". While the app is open, a jump of more than 2 minutes between the wall clock and the monotonic clock during a running session marks that session too. Recorded times are never corrected automatically.
 
+## Restore from a backup file (Settings → Backup, task 3.5)
+
+Decided 2026-11-13.
+
+- "Restore from a backup file" opens the file picker (`.json`). A file that fails validation shows "This isn't a Hourtrail backup file." or, for a newer format, "This backup was made by a newer version of Hourtrail. Update the app, then try again." Nothing is written.
+- A valid file shows a summary before anything changes: "Backup from Thu, Nov 12, 2026, 9:41 AM", counts ("312 sessions, 24 work items, 6 places, …", tombstones excluded from the counts), and the date range of its sessions. Then two choices:
+  - **Add what's missing** (default): adds only records whose ids are not on this device. Nothing here is changed or removed. Result: "Added 41 records. 271 were already here."
+  - **Replace everything**: makes this device, and the cloud when signed in, match the backup exactly. First "Save a backup of this device" (the same download or share as Download backup); "Replace everything" stays disabled until that has happened in this sheet. Then a typed confirmation: type `replace` to enable the button. Result: "This device now matches the backup from Nov 12."
+- Progress for large files: "Restoring… 1,200 of 3,400" with no cancel (each chunk is atomic; a closed app resumes from the outbox).
+- Works signed out (local only; the changes upload after sign-in) and signed in.
+
 ## Changelog
 
 One line per behaviour change, newest first: `YYYY-MM-DD task-id: what changed and why`.
