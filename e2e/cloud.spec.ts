@@ -74,6 +74,8 @@ test('sign in, link and revoke devices, preserve local recording, and sign out',
 		await a.getByRole('button', { name: 'Start' }).click();
 		await expect(a.getByRole('button', { name: 'Stop' })).toBeEnabled();
 		await a.getByRole('button', { name: 'Stop' }).click();
+		// Wait for the stop to be saved before navigating, or the session stays running.
+		await expect(a.getByText('Not tracking')).toBeVisible();
 		await a.context().setOffline(false);
 
 		await a.goto('/');
@@ -81,6 +83,7 @@ test('sign in, link and revoke devices, preserve local recording, and sign out',
 		await a.getByRole('button', { name: 'Start' }).click();
 		await expect(a.getByRole('button', { name: 'Stop' })).toBeEnabled();
 		await a.getByRole('button', { name: 'Stop' }).click();
+		await expect(a.getByText('Not tracking')).toBeVisible();
 
 		await a.goto('/settings/cloud');
 		await a.getByRole('button', { name: 'Link a device' }).click();
