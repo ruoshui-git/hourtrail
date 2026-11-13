@@ -24,19 +24,20 @@ Avoid, because they would make it look generic: uppercase or letter-spaced label
 
 All tokens are CSS custom properties prefixed `--ht-`, defined once in `apps/web/src/lib/styles/tokens.css` for light, and overridden under `@media (prefers-color-scheme: dark)` and `[data-theme]`. Components use tokens only; a stylelint rule rejects raw colours and off-scale lengths outside that file. Contrast ratios below were computed against paper and surface; keep the check as a unit test over the token file.
 
-| Token         | Light     | Dark      | Use                                            |
-| ------------- | --------- | --------- | ---------------------------------------------- |
-| `paper`       | `#F1F4F0` | `#111614` | Page background (pale map paper, forest night) |
-| `surface`     | `#FFFFFF` | `#1A211E` | Sheets, menus, toasts, inputs                  |
-| `sunken`      | `#E4E9E3` | `#0B0F0D` | Ribbon track, pressed state                    |
-| `ink`         | `#17211D` | `#E8EDE9` | Text, primary buttons (≥ 13:1)                 |
-| `ink-2`       | `#4C5953` | `#A9B5AF` | Secondary text (≥ 6:1)                         |
-| `ink-3`       | `#66726C` | `#86938C` | Tertiary text, gap rows (≥ 4.5:1 on paper)     |
-| `line`        | `#D5DBD5` | `#2B3531` | Hairlines, the trail                           |
-| `line-strong` | `#7A8780` | `#66746D` | Control borders (≥ 3:1)                        |
-| `danger`      | `#B42318` | `#FF8A7A` | Destructive text and icons                     |
-| `caution`     | `#8A5300` | `#F2B84B` | Review and clock cautions                      |
-| `brand`       | `#1E3A31` | same      | App icon and splash only                       |
+| Token                    | Light                | Dark          | Use                                                                                                                                                                      |
+| ------------------------ | -------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `paper`                  | `#F1F4F0`            | `#111614`     | Page background (pale map paper, forest night)                                                                                                                           |
+| `surface`                | `#FFFFFF`            | `#1A211E`     | Sheets, menus, toasts, inputs                                                                                                                                            |
+| `sunken`                 | `#E4E9E3`            | `#0B0F0D`     | Ribbon track, pressed state                                                                                                                                              |
+| `ink`                    | `#17211D`            | `#E8EDE9`     | Text, primary buttons (≥ 13:1)                                                                                                                                           |
+| `ink-2`                  | `#4C5953`            | `#A9B5AF`     | Secondary text (≥ 6:1)                                                                                                                                                   |
+| `ink-3`                  | `#66726C`            | `#86938C`     | Tertiary text, gap rows (≥ 4.5:1 on paper)                                                                                                                               |
+| `line`                   | `#D5DBD5`            | `#2B3531`     | Hairlines, the trail                                                                                                                                                     |
+| `line-strong`            | `#7A8780`            | `#66746D`     | Control borders (≥ 3:1)                                                                                                                                                  |
+| `danger`                 | `#B42318`            | `#FF8A7A`     | Destructive text and icons                                                                                                                                               |
+| `caution`                | `#8A5300`            | `#F2B84B`     | Review and clock cautions                                                                                                                                                |
+| `brand`                  | `#1E3A31`            | same          | App icon and splash only                                                                                                                                                 |
+| `code-ink`, `code-paper` | `#17211d`, `#f1f4f0` | same as light | Scannable codes (the link QR code). Never inverted for dark mode: many phone cameras cannot read light-on-dark QR codes. `--ht-code-size` (240px) caps the code's width. |
 
 Blaze palette (the `color` of an activity type). `mark` paints blazes, trail segments and chart bars (≥ 3.4:1 on paper as a graphic); `text` is for the rare coloured word in light mode (≥ 5.5:1); in dark mode the mark doubles as text.
 

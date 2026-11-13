@@ -16,7 +16,8 @@ export type LocalKey =
 	| 'clock_offset_ms'
 	| 'last_backup_at'
 	| 'push_state'
-	| 'capture_location';
+	| 'capture_location'
+	| 'auth_device';
 export type LocalRow = { key: LocalKey; value: unknown };
 export type LocalFix = Pick<
 	RecordOf<'session_fix'>,

@@ -78,6 +78,14 @@ const themes = [
 ] as const;
 
 describe('tokens.css', () => {
+	it('keeps scannable-code colours dark on light in both themes', () => {
+		for (const name of ['--ht-code-ink', '--ht-code-paper']) {
+			expect(darkMedia.has(name)).toBe(false);
+			expect(darkForced.has(name)).toBe(false);
+		}
+		expect(contrast(hex(light, 'code-ink'), hex(light, 'code-paper'))).toBeGreaterThanOrEqual(13);
+		expect(luminance(hex(light, 'code-paper'))).toBeGreaterThan(luminance(hex(light, 'code-ink')));
+	});
 	it('defines both dark blocks identically', () => {
 		expect([...darkMedia.entries()].sort()).toEqual([...darkForced.entries()].sort());
 	});

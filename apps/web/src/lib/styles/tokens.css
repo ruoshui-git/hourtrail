@@ -140,6 +140,12 @@
 	--ht-content-max: 720px;
 	--ht-content-narrow: 560px;
 
+	/* Scannable codes (link QR): always dark modules on light paper, in both themes, because
+	   many phone cameras cannot read an inverted QR code. Never overridden for dark. */
+	--ht-code-ink: #17211d;
+	--ht-code-paper: #f1f4f0;
+	--ht-code-size: 240px;
+
 	/* Interaction (computed from ink so they follow the theme) */
 	--ht-hover: color-mix(in srgb, var(--ht-ink) 6%, transparent);
 	--ht-pressed: color-mix(in srgb, var(--ht-ink) 12%, transparent);
