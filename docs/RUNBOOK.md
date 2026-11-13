@@ -104,3 +104,4 @@ Anything recorded on the lost phone that never synced is gone unless a backup fi
 3. If no device is signed in, rotate the key, then sign in again on each device. Data is untouched.
    | 2026-11-12 | production | 6470aee | Milestone 2 (daily organisation) after Gate 2's automated checks |
    | 2026-11-13 | production | 512f5e1 | Milestone 3 (cloud sync, sign-in, restore, nightly backups, privacy and erase) plus 4.1–4.4 (statistics, report builder, CSV/XLSX) after Gate 3's automated checks; migration 0001 applied; heartbeat secret set, NIGHTLY_ENABLED=true, first production backup run succeeded |
+   | 2026-11-13 | production | 19e8f90 | Milestone 4 (statistics, report builder and printing, CSV/XLSX, reminders with the five-minute cron and Web Push, polish pass) after Gate 4's automated checks; no migrations |
