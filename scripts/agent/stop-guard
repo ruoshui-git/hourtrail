@@ -39,13 +39,14 @@ try {
 }
 if (inFlight > 0) process.exit(0);
 
+// Agent scripts and CI watchers (`gh run watch`, which wakes the session when CI finishes).
 // Scripts are usually launched by relative path (`bash scripts/agent/verify`), so match the
 // name anywhere and keep only processes whose working directory is this repo or a worktree.
 let pids = [];
 try {
 	pids = execFileSync(
 		'pgrep',
-		['-f', 'scripts/(agent/(codex-run|verify|land|watch-runs)|heavy)( |$)'],
+		['-f', 'scripts/(agent/(codex-run|verify|land|watch-runs)|heavy)( |$)|gh run watch '],
 		{ encoding: 'utf8' },
 	)
 		.split('\n')
