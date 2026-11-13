@@ -37,8 +37,8 @@ The account ID (`c41859cdba545f9c1b16de4357176e53`) is not secret and lives in t
 ## Deploy _(to be completed by task 0.5)_
 
 - Staging: automatic from `main` (`.github/workflows/ci.yml`).
-- Production: `pnpm build && pnpm exec wrangler deploy --env production` from a clean `main`, only after owner approval at a gate. From the first production deploy, every IndexedDB schema change ships with an upgrade function and a fixture test.
-- D1 migrations: `pnpm exec wrangler d1 migrations apply <db> --env <env> --remote` before deploying a Worker that needs them.
+- Production: `pnpm build`, then `pnpm exec wrangler d1 migrations apply DB --env production --remote`, then `pnpm exec wrangler deploy --env production` (both from `apps/worker`) from a clean `main`, only after owner approval at a gate. From the first production deploy, every IndexedDB schema change ships with an upgrade function and a fixture test.
+- D1 migrations: `pnpm exec wrangler d1 migrations apply DB --env <env> --remote` before deploying a Worker that needs them. CI applies staging's on every `main` deploy; production's are applied by hand as above. Migrations only add; never edit a landed one.
 
 ## Account key and devices _(to be completed by task 3.2)_
 
