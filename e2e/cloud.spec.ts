@@ -100,6 +100,9 @@ test('sign in, link and revoke devices, preserve local recording, and sign out',
 		await captureCloudState(b, 'cloud-link-prefilled');
 		await b.getByLabel('Device name').fill(second);
 		await b.getByRole('button', { name: 'Link this device' }).click();
+		// Wait for the redirect: getByText matches substrings case-insensitively, so the text alone
+		// also matches /link's own "already signed in as" line before the redirect lands.
+		await expect(b).toHaveURL(/\/settings\/cloud$/);
 		await expect(b.getByText(`Signed in as ${second}`)).toBeVisible();
 		await b.goto(link!);
 		await expect(b.getByText(`This device is already signed in as ${second}.`)).toBeVisible();
