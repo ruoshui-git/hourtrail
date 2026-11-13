@@ -46,7 +46,7 @@ The account ID (`c41859cdba545f9c1b16de4357176e53`) is not secret and lives in t
 - Each device enrols once with the account key and then holds its own revocable session cookie (400 days). A signed-in device links another by QR code (Settings → Cloud and devices → Link a device).
 - Revoke a device: Settings → Cloud and devices → Revoke.
 
-## Backups _(to be completed by tasks 1.9, 3.5, 3.6)_
+## Backups _(backup file 1.9, nightly dump 3.6; restore UI 3.5)_
 
 Three independent lines of defence:
 
@@ -54,9 +54,17 @@ Three independent lines of defence:
 2. **Nightly dump**: the private `ruoshui-git/hourtrail-backups` repo runs a scheduled workflow: `wrangler d1 export --remote`, encrypted with `age` to the owner's recipient, committed as `dumps/YYYY/hourtrail-YYYY-MM-DD.sql.age`, pruned to 60 dailies plus the first of each month. It always updates `last-run.txt` (GitHub disables scheduled workflows after 60 days without activity) and calls `POST /api/backup/heartbeat`, so Settings shows "Last nightly backup". A failed run emails the owner through GitHub. Its Cloudflare token is scoped to D1 read/export only.
 3. **D1 Time Travel**: free-plan retention to be verified and recorded here.
 
+Nightly dump details (task 3.6, set up 2026-11-13):
+
+- The workflow lives in `ops/hourtrail-backups/` here and is published to the root of `ruoshui-git/hourtrail-backups` (copy the directory's contents, commit, push). Repo secrets: `CLOUDFLARE_D1_TOKEN`, `BACKUP_HEARTBEAT_SECRET` (production, set with `scripts/setup-heartbeat --env production` at the Milestone 3 production deploy), `BACKUP_HEARTBEAT_SECRET_STAGING`. Variables: `CLOUDFLARE_ACCOUNT_ID`, `AGE_RECIPIENT` (the owner's key), `AGE_RECIPIENT_STAGING`, and `NIGHTLY_ENABLED`.
+- Scheduled runs (07:17 UTC) are skipped until `NIGHTLY_ENABLED=true`, set when production first serves the backup routes. Manual runs: Actions → Nightly D1 backup → Run workflow, with `env` = production or staging.
+- `wrangler d1 export` makes the database unavailable to queries while it runs (seconds at this size). At 03:17 New York time that is harmless: the app works offline and sync retries.
+- Staging dumps go to `dumps-staging/`, encrypted to a staging-only key whose private half is `.secrets/staging-backup.key` on the orchestrator's machine (never used for production). Drills run on those.
+- First drill, 2026-11-13: staging seeded through the real app (sign-in, three sessions with Chinese names, sync), workflow run 43414572831, `scripts/restore-drill dumps-staging/2026/hourtrail-2026-11-13.sql.age --identity .secrets/staging-backup.key`: 1 device, 4 activity types, 3 work items, 3 sessions, 1 setting, 5 batches, all matching the live staging database.
+
 `scripts/setup-backup-key` (owner runs it) creates the `age` key pair, prints the private key once for the password manager and sets the recipient as a repo variable.
 
-## Restore procedures _(to be completed by tasks 3.5, 3.6)_
+## Restore procedures
 
 ### From a backup file
 
@@ -71,7 +79,14 @@ Restore writes locally and queues `mode: "restore"` batches, so it works on a cl
 
 1. Get the private `age` key from the password manager.
 2. `scripts/restore-drill <dump.sql.age>` decrypts the dump, loads it into a fresh local D1 and compares record counts per entity.
-3. To restore production: _(procedure to be written and rehearsed in task 3.6)_.
+3. To restore production (replaces cloud data, so **the owner approves step 6 first**):
+   1. Download the dump from `ruoshui-git/hourtrail-backups` and decrypt it: `age -d -i <key file> hourtrail-YYYY-MM-DD.sql.age > dump.sql`. Run `scripts/restore-drill` on it first.
+   2. Create a new database instead of overwriting the current one: `pnpm exec wrangler d1 create hourtrail-production-restore-YYYYMMDD` (from `apps/worker`).
+   3. Load it: `pnpm exec wrangler d1 execute hourtrail-production-restore-YYYYMMDD --remote --file dump.sql`. The dump includes the schema and the `d1_migrations` table, so migrations stay in step.
+   4. Check counts against the drill's table: `pnpm exec wrangler d1 execute hourtrail-production-restore-YYYYMMDD --remote --command "SELECT entity, COUNT(*) FROM records GROUP BY entity"`.
+   5. Export the newest backup file from the most up-to-date device (Settings → Backup), because devices may hold records newer than the dump.
+   6. Point `env.production.d1_databases[0].database_id` in `apps/worker/wrangler.jsonc` at the new database, commit, and deploy production. Keep the old database until the owner confirms the restore.
+   7. On the device from step 5, restore that backup file with "Add what's missing" (task 3.5). It queues restore batches, which put back anything newer than the dump. Device sessions survive, because `devices` is in the dump.
 
 ## Lost or replaced phone
 
