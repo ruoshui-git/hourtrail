@@ -1,4 +1,4 @@
-import { parseLocalDateTime, sessionMinutes } from '@hourtrail/core';
+import { findOverlaps, parseLocalDateTime } from '@hourtrail/core';
 import type { RecordOf } from '@hourtrail/core';
 
 export type TimeValidation =
@@ -62,20 +62,36 @@ export function sessionWarnings(
 ): string[] {
 	const warnings: string[] = [];
 	const actualEnd = end ?? now;
-	const overlap = sessions.find(
-		(session) =>
-			session.deleted_at === null &&
-			session.id !== currentId &&
-			session.start_at < actualEnd &&
-			(session.end_at ?? now) > start,
-	);
+	const candidate: RecordOf<'session'> = {
+		id: currentId ?? '00000000-0000-7000-8000-000000000000',
+		rev: 0,
+		created_at: now,
+		updated_at: now,
+		deleted_at: null,
+		updated_by: '',
+		work_item_id: null,
+		type_id: '',
+		start_at: start,
+		start_tz: 'UTC',
+		end_at: end,
+		end_tz: end === null ? null : 'UTC',
+		note: '',
+		source: 'manual',
+		place_id: null,
+		place_state: 'none',
+		place_candidates: [],
+		flags: {},
+		origin_device_id: '',
+	};
+	const overlap = findOverlaps(
+		[...sessions.filter((item) => item.id !== currentId), candidate],
+		now,
+	).find((pair) => pair.a === candidate.id || pair.b === candidate.id);
 	if (overlap) {
-		const overlapMinutes = Math.max(
-			1,
-			sessionMinutes(Math.max(start, overlap.start_at), Math.min(actualEnd, overlap.end_at ?? now)),
-		);
-		const item = items.find((candidate) => candidate.id === overlap.work_item_id);
-		warnings.push(`Overlaps ${item?.name ?? 'another session'} by ${overlapMinutes}m`);
+		const otherId = overlap.a === candidate.id ? overlap.b : overlap.a;
+		const other = sessions.find((item) => item.id === otherId);
+		const item = items.find((entry) => entry.id === other?.work_item_id);
+		warnings.push(`Overlaps ${item?.name ?? 'another session'} by ${overlap.minutes}m`);
 	}
 	if (actualEnd - start > 16 * 60 * 60 * 1000)
 		warnings.push('This session is longer than 16 hours.');

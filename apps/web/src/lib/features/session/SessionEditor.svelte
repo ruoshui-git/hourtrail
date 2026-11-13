@@ -3,10 +3,14 @@
 	import {
 		NEW_WORK_ITEM_TYPE_ID,
 		readSetting,
+		newId,
+		planMerge,
+		planSplit,
 		sessionMinutes,
+		parseLocalDateTime,
 		toLocalDateTime,
 	} from '@hourtrail/core';
-	import type { EditorRequest } from './editor.svelte';
+	import { openSessionEditor, type EditorRequest } from './editor.svelte';
 	import { db, repo } from '$lib/db/app';
 	import { live } from '$lib/live.svelte';
 	import Field from '$lib/components/Field.svelte';
@@ -19,6 +23,8 @@
 	import { sessionWarnings, validateSessionTimes } from './validate';
 	import { placeLabel } from '@hourtrail/core';
 	import { deleteSessionCoordinates } from '$lib/features/location/capture';
+	import Sheet from '$lib/components/Sheet.svelte';
+	import { applySessionPlan, findAdjacentCompatibleSession } from './tools';
 
 	let { request, onclose }: { request: EditorRequest; onclose: () => void } = $props();
 	const sessionId = $derived(request.mode === 'edit' ? request.sessionId : null);
@@ -49,6 +55,9 @@
 	let warningList = $state<string[]>([]);
 	let ambiguous = $state<string[]>([]);
 	let confirmDelete = $state(false);
+	let splitOpen = $state(false);
+	let splitValue = $state('');
+	let mergeOpen = $state(false);
 	let busy = $state(false);
 	let saveTimer: ReturnType<typeof setTimeout>;
 
@@ -108,6 +117,55 @@
 	const assignedPlace = $derived(
 		session?.place_id ? places.current.find((place) => place.id === session.place_id) : undefined,
 	);
+	const adjacentSession = $derived(
+		session ? findAdjacentCompatibleSession(sessions.current, session) : null,
+	);
+	const splitAt = $derived(parseLocalDateTime(splitValue, zone));
+	const splitPlan = $derived(
+		session && splitAt.ok ? planSplit(session, splitAt.instant, newId) : null,
+	);
+	const mergeResult = $derived(
+		session && adjacentSession ? planMerge(session, adjacentSession) : null,
+	);
+	const mergeLabel = $derived(
+		adjacentSession
+			? `Merge with the ${formatClock(adjacentSession.start_at, zone)}–${formatClock(adjacentSession.end_at!, zone)} session`
+			: '',
+	);
+	const mergeMessage = $derived(
+		mergeResult?.ok && session && adjacentSession
+			? `The merged session will run ${formatClock(Math.min(session.start_at, adjacentSession.start_at), zone)}–${formatClock(Math.max(session.end_at!, adjacentSession.end_at!), zone)}${mergeResult.gapMs > 0 ? `, including ${formatMinutes(Math.ceil(mergeResult.gapMs / 60_000))} not recorded` : ''}.`
+			: '',
+	);
+	function formatClock(timestamp: number, timeZone: string) {
+		return new Intl.DateTimeFormat('en-US', {
+			timeZone,
+			hour: 'numeric',
+			minute: '2-digit',
+		}).format(timestamp);
+	}
+	function beginSplit() {
+		if (!session || session.end_at === null) return;
+		const midpoint = Math.floor((session.start_at + session.end_at) / 2 / 60_000) * 60_000;
+		splitValue = toLocalDateTime(midpoint, zone);
+		splitOpen = true;
+	}
+	async function confirmSplit() {
+		if (!session || !splitAt.ok) return;
+		const result = planSplit(session, splitAt.instant, newId);
+		if (!result.ok) return;
+		const undo = await applySessionPlan(repo, 'Split session', result.plan);
+		splitOpen = false;
+		showToast({ message: 'Session split', undo: () => repo.undo(undo) });
+	}
+	async function confirmMerge() {
+		if (!session || !adjacentSession || !mergeResult?.ok) return;
+		const keptId = mergeResult.plan.update[0]?.id;
+		const undo = await applySessionPlan(repo, 'Merge sessions', mergeResult.plan);
+		mergeOpen = false;
+		if (keptId && keptId !== session.id) openSessionEditor(keptId);
+		showToast({ message: 'Sessions merged', undo: () => repo.undo(undo) });
+	}
 
 	function flashSaved() {
 		saved = true;
@@ -329,6 +387,14 @@
 				</div>{/snippet}
 		</Field>
 		{#if request.mode === 'edit' && session}
+			{#if session.end_at !== null}
+				<div class="tool-actions">
+					<Button variant="secondary" onclick={beginSplit}>Split</Button>
+					{#if adjacentSession}<Button variant="secondary" onclick={() => (mergeOpen = true)}
+							>{mergeLabel}</Button
+						>{/if}
+				</div>
+			{/if}
 			<Field label="Place">
 				{#snippet children(props)}
 					<div class="place-field">
@@ -382,6 +448,45 @@
 	confirmLabel="Delete session"
 	danger
 	onconfirm={deleteSession}
+/>
+<Sheet bind:open={splitOpen} title="Split session">
+	<div class="editor">
+		<Field
+			label="Split at"
+			error={splitPlan && !splitPlan.ok
+				? splitPlan.error === 'running'
+					? "A running session can't be split. Stop it first."
+					: 'Choose a time at least one minute inside the session.'
+				: undefined}
+		>
+			{#snippet children(props)}<input
+					{...props}
+					type="datetime-local"
+					bind:value={splitValue}
+				/>{/snippet}
+		</Field>
+		{#if session && session.end_at !== null && splitAt.ok}
+			<p class="duration">
+				{formatClock(session.start_at, zone)}–{formatClock(splitAt.instant, zone)}, {formatMinutes(
+					sessionMinutes(session.start_at, splitAt.instant),
+				)}
+			</p>
+			<p class="duration">
+				{formatClock(splitAt.instant, zone)}–{formatClock(session.end_at, zone)}, {formatMinutes(
+					sessionMinutes(splitAt.instant, session.end_at),
+				)}
+			</p>
+		{/if}
+		<Button wide disabled={!splitPlan?.ok} onclick={() => void confirmSplit()}>Split session</Button
+		>
+	</div>
+</Sheet>
+<ConfirmDialog
+	bind:open={mergeOpen}
+	title="Merge sessions?"
+	message={mergeMessage}
+	confirmLabel="Merge sessions"
+	onconfirm={confirmMerge}
 />
 
 <style>
@@ -451,5 +556,10 @@
 	.delete-row {
 		display: flex;
 		justify-content: flex-end;
+	}
+
+	.tool-actions {
+		display: grid;
+		gap: var(--ht-space-2);
 	}
 </style>
