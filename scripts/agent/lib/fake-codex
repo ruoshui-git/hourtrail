@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# Stand-in for `codex exec` used by scripts/agent/selftest (via HT_CODEX_BIN).
+# FAKE_CODEX_MODE: hang | error | busy | heavy | ok
+cat >/dev/null # consume the brief like codex does
+event() { printf '{"type":"%s","n":%s}\n' "$1" "${2:-0}"; }
+case ${FAKE_CODEX_MODE:-ok} in
+	hang)
+		sleep 100000 ;;
+	error)
+		echo "error: stream disconnected before completion (simulated)" >&2
+		exit 3 ;;
+	busy)
+		event thread.started
+		i=0
+		while :; do i=$((i + 1)); event item.completed "$i"; sleep 2; done ;;
+	heavy)
+		event thread.started
+		# No events while waiting for a lock someone else holds: only the heavy
+		# heartbeat shows the run is alive.
+		HT_HEAVY_HEARTBEAT_S=5 "$PWD/scripts/heavy" sleep 1
+		echo changed >selftest-output.txt
+		event turn.completed
+		exit 0 ;;
+	ok)
+		event thread.started
+		echo changed >selftest-output.txt
+		event turn.completed
+		exit 0 ;;
+esac

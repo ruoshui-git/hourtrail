@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+set -Euo pipefail
+
+# Liveness timer for Codex runs. Launch with Bash run_in_background whenever runs
+# are in flight; it exits (waking you) as soon as `status` reports a died,
+# stalled or overdue run (exit 3), when no runs remain in flight (exit 0), or
+# after the cap (default 30 min, exit 0: re-arm it). Usage:
+#   watch-runs [CHECK_EVERY_SECONDS=60] [CAP_SECONDS=1800]
+
+every=${1:-60}
+cap=${2:-1800}
+here=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+start=$(date +%s)
+while :; do
+	set +e
+	out=$("$here/status" 2>&1)
+	rc=$?
+	set -e
+	if ((rc == 3)); then
+		echo "watch-runs: PROBLEM"
+		echo "$out"
+		exit 3
+	fi
+	if [[ $out == *"in flight: 0;"* ]]; then
+		echo "watch-runs: no runs in flight"
+		echo "$out"
+		exit 0
+	fi
+	if (($(date +%s) - start >= cap)); then
+		echo "watch-runs: $((cap / 60)) min check-in; runs still in flight, re-arm"
+		echo "$out"
+		exit 0
+	fi
+	sleep "$every"
+done

@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-set -Eeuo pipefail
+set -Euo pipefail
 
 # Land a verified task: rebase its committed branch on main, require `pnpm check`
-# to pass, fast-forward main, push, and remove the worktree and branch.
-# Stops (and changes nothing on main) if the rebase or the check fails.
-# Also refuses when the task's commits touch files outside the brief's `owned`
-# globs, unless each such path matches an --extra GLOB (orchestrator review fixes).
+# (and E2E when apps/ or e2e/ change) to pass, fast-forward main, push, and remove
+# the worktree and branch. Stops, changing nothing on main, if any step fails.
+# Refuses paths outside the brief's `owned` globs unless allowed with --extra GLOB.
+# Never hangs: each step has a limit (HT_LAND_<STEP>_S, seconds) and the whole run
+# an overall deadline (HT_LAND_DEADLINE_S, default 60 min); a timeout names the step.
 # Usage: land NAME [--extra GLOB]...
 
 name=${1:?Usage: land NAME [--extra GLOB]...}
@@ -21,10 +22,34 @@ export PATH="$HOME/.local/bin:$PATH"
 here=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 repo=$(dirname -- "$(git -C "$here" rev-parse --path-format=absolute --git-common-dir)")
 wt=$repo/.worktrees/$name
+log=$repo/.agent-runs/$name
+mkdir -p "$log"
+current=startup
+limit() { local var="HT_LAND_${1}_S"; echo "${!var:-$2}"; }
+deadline_s=${HT_LAND_DEADLINE_S:-3600}
+(sleep "$deadline_s" && kill -TERM $$) >/dev/null 2>&1 &
+sentinel=$!
+trap 'pkill -TERM -P $$ 2>/dev/null || true; echo "land: FAILED: overall deadline of ${deadline_s}s reached during step: $current" >&2; exit 124' TERM
+trap 'kill "$sentinel" 2>/dev/null || true; pkill -P "$sentinel" 2>/dev/null || true' EXIT
+
+run_step() { # run_step LABEL LIMIT_SECONDS LOGFILE COMMAND... (runs in the worktree)
+	local label=$1 secs=$2 out=$3 rc=0
+	shift 3
+	current=$label
+	timeout -k 15 "$secs" bash -c 'cd "$1" && shift && "$@"' _ "$wt" "$@" >"$out" 2>&1 || rc=$?
+	if ((rc == 124 || rc == 137)); then
+		echo "land: TIMEOUT: $label did not finish within ${secs}s; see $out" >&2
+		exit 124
+	elif ((rc != 0)); then
+		echo "land: $label failed for $name; see $out" >&2
+		exit 1
+	fi
+}
+
 [[ -z $(git -C "$wt" status --porcelain) ]] || { echo "land: $name has uncommitted changes" >&2; exit 1; }
-git -C "$wt" rebase -q main
+run_step rebase "$(limit REBASE 120)" "$log/land-rebase.log" git rebase -q main
 # Scope guard: every path the task changes must be owned (or explicitly allowed).
-outside=$(node "$repo/scripts/agent/lib/scope.mjs" "$repo/.agent-runs/$name/brief.orig.md" \
+outside=$(node "$repo/scripts/agent/lib/scope.mjs" "$log/brief.orig.md" \
 	"$(git -C "$wt" diff --name-only main..HEAD)" "${extra[@]}")
 if [[ -n $outside ]]; then
 	echo "land: $name changes paths outside its owned globs:" >&2
@@ -32,22 +57,17 @@ if [[ -n $outside ]]; then
 	echo "land: pass --extra GLOB for intended review fixes, or fix the branch" >&2
 	exit 1
 fi
-(cd "$wt" && pnpm install --frozen-lockfile --prefer-offline --reporter=silent)
-if ! (cd "$wt" && pnpm check >"$repo/.agent-runs/$name/land-check.log" 2>&1); then
-	echo "land: pnpm check failed for $name; see .agent-runs/$name/land-check.log" >&2
-	exit 1
-fi
+run_step install "$(limit INSTALL 600)" "$log/land-install.log" pnpm install --frozen-lockfile --prefer-offline --reporter=silent
+run_step check "$(limit CHECK 1200)" "$log/land-check.log" pnpm check
 # UI and sync changes also need the browser suite (a review fix once changed
 # wording that an E2E spec asserted, and only pnpm check ran).
 if git -C "$wt" diff --name-only main..HEAD | grep -qE '^(apps/|e2e/)'; then
-	if ! (cd "$wt" && HT_PORT_BASE=${HT_PORT_BASE:-5640} "$repo/scripts/heavy" pnpm e2e \
-		>"$repo/.agent-runs/$name/land-e2e.log" 2>&1); then
-		echo "land: E2E failed for $name; see .agent-runs/$name/land-e2e.log" >&2
-		exit 1
-	fi
+	run_step e2e "$(limit E2E 2400)" "$log/land-e2e.log" env HT_PORT_BASE="${HT_PORT_BASE:-5640}" "$repo/scripts/heavy" pnpm e2e
 fi
+current=merge
 git -C "$repo" merge -q --ff-only "task/$name"
-git -C "$repo" push -q
+current=push
+timeout 120 git -C "$repo" push -q || { echo "land: push failed or timed out; main is merged locally, push it by hand" >&2; exit 1; }
 git -C "$repo" worktree remove --force "$wt"
 git -C "$repo" branch -q -D "task/$name"
 echo "land: $name merged at $(git -C "$repo" rev-parse --short HEAD)"

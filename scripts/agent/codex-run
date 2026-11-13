@@ -1,26 +1,37 @@
 #!/usr/bin/env bash
-set -Eeuo pipefail
+set -Euo pipefail
 
-# Run one Codex task in its own git worktree with a structured JSON report,
-# a built-in watchdog and a scope/test-integrity summary. Launch it with Bash
-# run_in_background; it exits when the run ends. See docs/agents/codex.md.
+# Run one Codex task in its own git worktree with a structured JSON report.
+# Launch it with Bash run_in_background (never a plain `&`). See docs/agents/codex.md.
+#
+# Every path out of this script, including setup errors, hangs, crashes and
+# signals, writes .agent-runs/NAME/exit (a code), exit-reason (one line) and
+# summary.txt, then exits with that code. Exit codes:
+#   0      Codex finished                 1-99  Codex exited with that code
+#   119    busy but no progress           120   died (written later by `status`)
+#   121    setup error                    122   dependency install failed
+#   123    dependency install timed out   124   Codex run timed out (--timeout)
+#   125    stalled: no events, no heavy-lock heartbeat, no file changes (--stall)
+#   126    outer deadline (--deadline)     128+N killed by signal N (129 HUP, 130 INT, 143 TERM)
+#   2/3    usage error / refused by the usage budget (nothing launched, no run files)
 
 usage() {
 	cat >&2 <<'USAGE'
 Usage: codex-run NAME BRIEF [--model M] [--effort low|medium|high|xhigh]
-                 [--resume SESSION | --fork SESSION] [--timeout MIN] [--stall MIN]
+                 [--resume SESSION | --fork SESSION] [--timeout T] [--stall T]
+                 [--progress T] [--install-timeout T] [--deadline T]
                  [--fast] [--force-model]
 
-  NAME           Task name: worktree .worktrees/NAME, branch task/NAME, run dir .agent-runs/NAME.
-  BRIEF          Brief file (front matter: owned, read_only, checks); - reads stdin.
-  --model M      gpt-6-luna (default) or gpt-6.1-sol. Never gpt-6-astra.
-  --effort E     Reasoning effort, default medium.
-  --resume ID    Continue an earlier session in the same worktree.
-  --fork ID      Continue in a new thread (when resume reports an active writer).
-  --timeout MIN  End the run with exit 124 after MIN minutes (default 75).
-  --stall MIN    End the run with exit 125 after MIN minutes without an event (default 15).
-  --fast         Use fast mode (service_tier="fast"). Off by default: the owner does not want it.
-  --force-model  Launch even when the usage budget says to downgrade or hold.
+  T is minutes, or seconds with an `s` suffix (for example 90s).
+  --timeout T          Codex run limit (default 75).
+  --stall T            End when nothing at all happens for T: no Codex event, no
+                       heavy-lock heartbeat, no worktree change (default 12).
+  --progress T         Warn when Codex keeps emitting events but the worktree diff
+                       has not changed for T; end the run after 2T (default 30).
+  --install-timeout T  Dependency install limit (default 10).
+  --deadline T         Whole-runner limit, setup to summary (default timeout + 20).
+Test hooks: HT_CODEX_BIN replaces the codex binary; HT_INSTALL_CMD replaces the
+install command.
 USAGE
 	exit 2
 }
@@ -33,11 +44,21 @@ shift 2
 	echo "codex-run: NAME must be lowercase letters, digits, dot, dash or underscore" >&2
 	exit 2
 }
+seconds() { # minutes, or Ns
+	local v=$1
+	if [[ $v =~ ^([0-9]+)s$ ]]; then echo "${BASH_REMATCH[1]}"; elif [[ $v =~ ^[0-9]+$ ]]; then echo $((v * 60)); else
+		echo "codex-run: bad duration '$v'" >&2
+		exit 2
+	fi
+}
 model=gpt-6-luna
 effort=medium
 mode=()
-timeout_min=75
-stall_min=15
+timeout_s=$((75 * 60))
+stall_s=$((12 * 60))
+progress_s=$((30 * 60))
+install_s=$((10 * 60))
+deadline_s=
 fast=0
 force=0
 while [[ $# -gt 0 ]]; do
@@ -46,32 +67,40 @@ while [[ $# -gt 0 ]]; do
 		--effort) effort=${2:?}; shift 2 ;;
 		--resume) mode=(resume "${2:?}"); shift 2 ;;
 		--fork) mode=(fork "${2:?}"); shift 2 ;;
-		--timeout) timeout_min=${2:?}; shift 2 ;;
-		--stall) stall_min=${2:?}; shift 2 ;;
+		--timeout) timeout_s=$(seconds "${2:?}"); shift 2 ;;
+		--stall) stall_s=$(seconds "${2:?}"); shift 2 ;;
+		--progress) progress_s=$(seconds "${2:?}"); shift 2 ;;
+		--install-timeout) install_s=$(seconds "${2:?}"); shift 2 ;;
+		--deadline) deadline_s=$(seconds "${2:?}"); shift 2 ;;
 		--fast) fast=1; shift ;;
+		--no-fast) fast=0; shift ;;
 		--force-model) force=1; shift ;;
 		*) usage ;;
 	esac
 done
+deadline_s=${deadline_s:-$((timeout_s + 20 * 60))}
 [[ $model != *astra* ]] || { echo "codex-run: gpt-6-astra is not used on this project" >&2; exit 2; }
 
 export PATH="$HOME/.local/bin:$PATH"
 here=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-# Always operate from the main checkout, even when invoked from a worktree.
 common=$(git -C "$here" rev-parse --path-format=absolute --git-common-dir)
 repo=$(dirname -- "$common")
 wt=$repo/.worktrees/$name
 run=$repo/.agent-runs/$name
 schema=$repo/scripts/agent/report.schema.json
+codex_bin=${HT_CODEX_BIN:-codex}
+install_cmd=${HT_INSTALL_CMD:-pnpm install --frozen-lockfile --prefer-offline --reporter=silent}
 
-# Budget check (shared Codex account; policy in docs/agents/codex.md).
-"$repo/scripts/agent/codex-usage" || true
-if ! "$repo/scripts/agent/codex-usage" --allow "$model"; then
-	if ((force)); then
-		echo "codex-run: --force-model given; launching $model anyway" >&2
-	else
-		echo "codex-run: refusing to launch $model; pick another model or pass --force-model" >&2
-		exit 3
+# Budget check before anything is created (shared Codex account; docs/agents/codex.md).
+if [[ -z ${HT_CODEX_BIN:-} ]]; then
+	"$repo/scripts/agent/codex-usage" || true
+	if ! "$repo/scripts/agent/codex-usage" --allow "$model"; then
+		if ((force)); then
+			echo "codex-run: --force-model given; launching $model anyway" >&2
+		else
+			echo "codex-run: refusing to launch $model; pick another model or pass --force-model" >&2
+			exit 3
+		fi
 	fi
 fi
 
@@ -81,23 +110,102 @@ if [[ -f $run/pid ]] && kill -0 "$(cat "$run/pid")" 2>/dev/null; then
 	exit 1
 fi
 
+# ---------------------------------------------------------------------------
+# From here on, every exit goes through finish(), which always writes exit,
+# exit-reason and summary.txt.
+phase=setup
+cpid=
+sentinel=
+finished=0
+
+kill_tree() { # TERM then KILL a process and its descendants
+	local pid=$1 kids
+	[[ -n $pid ]] || return 0
+	kids=$(pgrep -P "$pid" 2>/dev/null || true)
+	for k in $kids; do kill_tree "$k"; done
+	kill -TERM "$pid" 2>/dev/null || true
+}
+kill_tree_hard() {
+	local pid=$1 kids
+	[[ -n $pid ]] || return 0
+	kids=$(pgrep -P "$pid" 2>/dev/null || true)
+	for k in $kids; do kill_tree_hard "$k"; done
+	kill -KILL "$pid" 2>/dev/null || true
+}
+
+finish() { # finish CODE REASON
+	((finished)) && return 0
+	finished=1
+	trap - ERR INT TERM HUP
+	local code=$1 reason=$2
+	if [[ -n $cpid ]] && kill -0 "$cpid" 2>/dev/null; then
+		kill_tree "$cpid"
+		sleep 3
+		kill_tree_hard "$cpid"
+	fi
+	kill_tree "$sentinel"
+	echo "$code" >"$run/exit"
+	echo "$reason" >"$run/exit-reason"
+	echo "codex-run: $reason" >>"$run/stderr.log"
+	if [[ -s $run/events.jsonl ]]; then
+		timeout 30 node "$repo/scripts/agent/lib/session-id.mjs" "$run/events.jsonl" >"$run/session.new" 2>/dev/null &&
+			[[ -s $run/session.new ]] && mv "$run/session.new" "$run/session"
+		rm -f "$run/session.new"
+	fi
+	if ! timeout 120 node "$repo/scripts/agent/lib/summarize.mjs" "$name" >"$run/summary.txt" 2>>"$run/stderr.log"; then
+		{
+			echo "codex-run $name: exit $code ($reason)"
+			echo "summary generation failed or timed out; see $run/stderr.log and $run/events.jsonl"
+		} >"$run/summary.txt"
+	fi
+	[[ -f $run/warnings ]] && { echo "warnings:"; sed 's/^/  /' "$run/warnings"; } >>"$run/summary.txt"
+	rm -f "$run/pid" "$run/phase"
+	cat "$run/summary.txt"
+	exit "$code"
+}
+trap 'finish 121 "setup error in phase $phase at line $LINENO: $BASH_COMMAND"' ERR
+trap 'finish 130 "runner killed by signal INT during $phase"' INT
+trap 'finish 143 "runner killed by signal TERM during $phase"' TERM
+trap 'finish 129 "runner killed by signal HUP during $phase"' HUP
+trap '((finished)) || finish 121 "runner exited unexpectedly during $phase"' EXIT
+set -E
+
+echo $$ >"$run/pid"
+echo "$phase" >"$run/phase"
+write_meta() { # visible to `status` from the first second, rewritten once the port is known
+	{
+		echo "name=$name model=$model effort=$effort fast=$fast mode=${mode[*]:-new}"
+		echo "worktree=$wt port=${port:-pending} started=$started_iso started_epoch=$started_epoch"
+		echo "timeout_s=$timeout_s stall_s=$stall_s progress_s=$progress_s deadline_s=$deadline_s"
+	} >"$run/meta"
+}
+started_iso=$(date -Is)
+started_epoch=$(date +%s)
+port=
+write_meta
+# Outer deadline: one sentinel for the whole runner, setup to summary.
+(sleep "$deadline_s" && echo deadline >"$run/deadline-hit" && kill -TERM $$) >/dev/null 2>&1 &
+sentinel=$!
+trap 'if [[ -f $run/deadline-hit ]]; then finish 126 "outer deadline of $((deadline_s / 60)) min reached during $phase"; else finish 143 "runner killed by signal TERM during $phase"; fi' TERM
+rm -f "$run/deadline-hit"
+
 # Brief: copy it in (keep earlier rounds' files on resume/fork).
 if ((${#mode[@]})); then
 	round=1
 	while [[ -d $run/round-$round ]]; do round=$((round + 1)); done
 	mkdir -p "$run/round-$round"
-	for f in brief.md events.jsonl report.json summary.txt exit stderr.log; do
-		[[ -f $run/$f ]] && mv "$run/$f" "$run/round-$round/$f"
+	for f in brief.md events.jsonl report.json summary.txt exit exit-reason stderr.log warnings; do
+		if [[ -f $run/$f ]]; then mv "$run/$f" "$run/round-$round/$f"; fi
 	done
-	# The original brief keeps the owned globs; a fix brief may omit front matter.
 	[[ -f $run/brief.orig.md ]] || cp "$run/round-$round/brief.md" "$run/brief.orig.md" 2>/dev/null || true
 else
-	rm -f "$run"/{events.jsonl,report.json,summary.txt,exit,session,stderr.log,brief.orig.md}
+	rm -f "$run"/{events.jsonl,report.json,summary.txt,exit,exit-reason,session,stderr.log,brief.orig.md,warnings,heavy-wait,heavy-run}
 fi
 if [[ $brief == - ]]; then cat >"$run/brief.md"; else cp -- "$brief" "$run/brief.md"; fi
 [[ -f $run/brief.orig.md ]] || cp "$run/brief.md" "$run/brief.orig.md"
 
-# Worktree on task/NAME from main.
+phase=worktree
+echo "$phase" >"$run/phase"
 if [[ ! -d $wt ]]; then
 	if git -C "$repo" show-ref --verify --quiet "refs/heads/task/$name"; then
 		git -C "$repo" worktree add -q "$wt" "task/$name"
@@ -106,12 +214,18 @@ if [[ ! -d $wt ]]; then
 	fi
 fi
 git -C "$wt" rev-parse HEAD >"$run/base"
-echo "codex-run: installing dependencies in $wt" >&2
-(cd "$wt" && pnpm install --frozen-lockfile --prefer-offline --reporter=silent) >"$run/install.log" 2>&1 || {
-	echo "codex-run: pnpm install failed; see $run/install.log" >&2
-	exit 1
-}
 
+phase=install
+echo "$phase" >"$run/phase"
+echo "codex-run: installing dependencies in $wt (limit $((install_s / 60)) min)" >&2
+set +e
+(cd "$wt" && timeout -k 10 "$install_s" bash -c "$install_cmd") >"$run/install.log" 2>&1
+irc=$?
+set -e
+if ((irc == 124 || irc == 137)); then finish 123 "dependency install timed out after $install_s s"; fi
+if ((irc != 0)); then finish 122 "dependency install failed (exit $irc); see install.log"; fi
+
+phase=setup
 # Port block: 20 ports per slot, lowest slot not held by a live run.
 if [[ ! -f $run/port ]]; then
 	used=" "
@@ -127,11 +241,8 @@ if [[ ! -f $run/port ]]; then
 fi
 port=$(cat "$run/port")
 
-# Writable roots beyond the worktree.
 roots=("$run" "$HOME/.cache" /tmp "$(pnpm store path 2>/dev/null || echo "$HOME/.local/share/pnpm")")
-heavy_lock=/tmp/hourtrail-heavy.lock
 printf -v roots_toml '"%s",' "${roots[@]}"
-
 cfg=(
 	-c "model_reasoning_effort=\"$effort\""
 	-c 'sandbox_mode="workspace-write"'
@@ -140,20 +251,12 @@ cfg=(
 	-c "sandbox_workspace_write.writable_roots=[${roots_toml%,}]"
 )
 ((fast)) && cfg+=(-c 'service_tier="fast"')
-cmd=(codex exec)
-if ((${#mode[@]})); then
-	cmd+=("${mode[@]}")
-else
-	cmd+=(-C "$wt")
-fi
+cmd=("$codex_bin" exec)
+if ((${#mode[@]})); then cmd+=("${mode[@]}"); else cmd+=(-C "$wt"); fi
 cmd+=(--json -m "$model" "${cfg[@]}" --output-schema "$schema" -o "$run/report.json" -)
 
-{
-	echo "name=$name model=$model effort=$effort fast=$fast mode=${mode[*]:-new}"
-	echo "worktree=$wt port=$port started=$(date -Is)"
-} >"$run/meta"
+write_meta
 
-# Minimal environment: no Cloudflare or GitHub credentials reach Codex.
 envv=(
 	env -i
 	"PATH=$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin"
@@ -164,51 +267,82 @@ envv=(
 	"TERM=dumb"
 	"HT_PORT_BASE=$port"
 	"HT_RUN_DIR=$run"
-	"HT_HEAVY_LOCK=$heavy_lock"
+	"HT_HEAVY_LOCK=${HT_HEAVY_LOCK:-/tmp/hourtrail-heavy.lock}"
 	# Wrangler writes config and logs here; the real ~/.config (with its login) stays out of reach.
 	"XDG_CONFIG_HOME=/tmp/hourtrail-xdg-config"
 )
+[[ -n ${FAKE_CODEX_MODE:-} ]] && envv+=("FAKE_CODEX_MODE=$FAKE_CODEX_MODE")
 
-echo $$ >"$run/pid"
-trap 'rm -f "$run/pid"' EXIT
-set +e
+phase=codex
+echo "$phase" >"$run/phase"
+: >"$run/events.jsonl"
 (cd "$wt" && exec "${envv[@]}" "${cmd[@]}" <"$run/brief.md" >"$run/events.jsonl" 2>"$run/stderr.log") &
 cpid=$!
 
-# Watchdog: total timeout and stall (no new event) limits.
+# Watchdog: total timeout, stall (nothing at all happening) and progress.
+fingerprint() ( # changes whenever the worktree's content changes; never fails
+	trap - ERR
+	set +e +o pipefail
+	{
+		git -C "$wt" status --porcelain=v1 -uall
+		git -C "$wt" diff HEAD
+		git -C "$wt" ls-files -o --exclude-standard -z | (cd "$wt" && xargs -0 -r sha1sum)
+	} 2>/dev/null | sha1sum | cut -c1-40
+	exit 0
+)
+fresh() { # fresh FILE SECONDS: file exists and was touched within SECONDS
+	[[ -f $1 ]] && (($(date +%s) - $(stat -c %Y "$1") <= $2))
+}
 start=$(date +%s)
-status=
+last_event=$start
+last_alive=$start
+last_progress=$start
+fp=$(fingerprint)
+events_size=0
+warned=0
 while kill -0 "$cpid" 2>/dev/null; do
-	sleep 10
+	sleep 5
 	now=$(date +%s)
-	last=$(stat -c %Y "$run/events.jsonl" 2>/dev/null || echo "$start")
-	if ((now - start >= timeout_min * 60)); then
-		status=124
-		echo "codex-run: timeout after $timeout_min min" >>"$run/stderr.log"
-	elif ((now - last >= stall_min * 60)); then
-		status=125
-		echo "codex-run: no event for $stall_min min" >>"$run/stderr.log"
+	size=$(stat -c %s "$run/events.jsonl" 2>/dev/null || echo 0)
+	if ((size != events_size)); then
+		events_size=$size
+		last_event=$now
+		last_alive=$now
 	fi
-	if [[ -n $status ]]; then
-		pkill -TERM -P "$cpid" 2>/dev/null
-		kill -TERM "$cpid" 2>/dev/null
-		sleep 5
-		pkill -KILL -P "$cpid" 2>/dev/null
-		kill -KILL "$cpid" 2>/dev/null
-		break
+	heavy=0
+	if fresh "$run/heavy-wait" 90 || fresh "$run/heavy-run" 90; then
+		heavy=1
+		last_alive=$now
+		last_progress=$now # waiting on (or running under) the lock is not a lack of progress
+	fi
+	new_fp=$(fingerprint)
+	if [[ $new_fp != "$fp" ]]; then
+		fp=$new_fp
+		last_alive=$now
+		last_progress=$now
+		warned=0
+	fi
+	if ((now - start >= timeout_s)); then
+		finish 124 "Codex run timed out after $((timeout_s / 60)) min"
+	elif ((now - last_alive >= stall_s)); then
+		finish 125 "stalled: no Codex event, heavy-lock heartbeat or worktree change for $((stall_s / 60)) min ($stall_s s)"
+	elif ((now - last_event < stall_s && now - last_progress >= 2 * progress_s)); then
+		finish 119 "busy without progress: events but no worktree change for $((2 * progress_s / 60)) min ($((2 * progress_s)) s)"
+	elif ((!warned && now - last_event < stall_s && now - last_progress >= progress_s)); then
+		warned=1
+		echo "$(date -Is) warning: events continue but the worktree has not changed for $((progress_s / 60)) min ($progress_s s)" >>"$run/warnings"
 	fi
 done
+set +e
 wait "$cpid"
 rc=$?
 set -e
-status=${status:-$rc}
-echo "$status" >"$run/exit"
-
-node "$repo/scripts/agent/lib/session-id.mjs" "$run/events.jsonl" >"$run/session.new" 2>/dev/null &&
-	[[ -s $run/session.new ]] && mv "$run/session.new" "$run/session"
-rm -f "$run/session.new"
-
-node "$repo/scripts/agent/lib/summarize.mjs" "$name" >"$run/summary.txt" 2>>"$run/stderr.log" ||
-	echo "summary failed; see $run/stderr.log" >"$run/summary.txt"
-cat "$run/summary.txt"
-exit "$status"
+cpid=
+phase=summary
+echo "$phase" >"$run/phase"
+if ((rc == 0)); then
+	finish 0 "Codex finished"
+else
+	last=$(grep -v '^\s*$' "$run/stderr.log" 2>/dev/null | tail -n 1 | cut -c1-160)
+	finish "$rc" "Codex exited $rc${last:+: $last}"
+fi

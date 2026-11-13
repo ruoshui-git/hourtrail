@@ -1,0 +1,99 @@
+#!/usr/bin/env bash
+set -Euo pipefail
+
+# Demonstrate that every Codex-run failure mode is caught, using a fake codex
+# (scripts/agent/lib/fake-codex) and short limits. Prints, per scenario, the
+# exit file, exit-reason, the first summary line and `status`'s view, then
+# cleans up its worktrees, branches and run directories. Takes about 2 minutes.
+# Uses its own heavy lock, so real tasks are not blocked.
+
+export PATH="$HOME/.local/bin:$PATH"
+here=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+repo=$(dirname -- "$(git -C "$here" rev-parse --path-format=absolute --git-common-dir)")
+runner=$repo/scripts/agent/codex-run
+export HT_CODEX_BIN=$repo/scripts/agent/lib/fake-codex
+export HT_HEAVY_LOCK=/tmp/hourtrail-selftest-heavy.lock
+work=$(mktemp -d)
+brief=$work/brief.md
+printf -- '---\nowned:\n  - selftest-output.txt\n---\nSelf-test brief.\n' >"$brief"
+names=()
+
+launch() { # launch NAME MODE [ENV=VAL...] -- [RUNNER ARGS...]
+	local name=selftest-$1 mode=$2
+	shift 2
+	local envs=()
+	while [[ $# -gt 0 && $1 != -- ]]; do envs+=("$1"); shift; done
+	[[ ${1:-} == -- ]] && shift
+	names+=("$name")
+	rm -rf "$repo/.agent-runs/$name"
+	env FAKE_CODEX_MODE="$mode" HT_INSTALL_CMD=true "${envs[@]}" \
+		"$runner" "$name" "$brief" --model fake "$@" >"$work/$name.out" 2>&1 &
+	echo $! >"$work/$name.launcher"
+}
+report() { # report NAME TITLE
+	local name=selftest-$1 dir=$repo/.agent-runs/selftest-$1
+	echo "--- $2"
+	echo "    exit file:   $(cat "$dir/exit" 2>/dev/null || echo MISSING)"
+	echo "    exit-reason: $(cat "$dir/exit-reason" 2>/dev/null || echo MISSING)"
+	echo "    summary:     $(head -n 1 "$dir/summary.txt" 2>/dev/null || echo MISSING)"
+	if [[ -f $dir/warnings ]]; then echo "    warnings:    $(head -n 1 "$dir/warnings")"; fi
+	echo "    status:      $("$repo/scripts/agent/status" 2>/dev/null | grep -E "^[a-z]+ +$name " | sed 's/  */ /g' || true)"
+}
+
+echo "== batch 1: hang, error, busy, install hang, outer deadline (in parallel)"
+launch hang hang -- --stall 20s --timeout 10
+launch error error -- --stall 20s
+launch busy busy -- --stall 60s --progress 15s
+launch install hang HT_INSTALL_CMD="sleep 600" -- --install-timeout 10s
+launch deadline hang -- --stall 600s --deadline 25s
+for n in hang error busy install deadline; do wait "$(cat "$work/selftest-$n.launcher")" || true; done
+report hang "fake codex hangs (no events, no changes) -> stall"
+report error "fake codex exits immediately with an error"
+report busy "fake codex emits events but changes nothing -> warning, then no-progress exit"
+report install "dependency install hangs -> install timeout"
+report deadline "runner exceeds its outer deadline"
+
+echo "== batch 2: heavy-lock wait, killed runner (restart), TERM signal"
+flock "$HT_HEAVY_LOCK" sleep 40 &
+holder=$!
+sleep 1
+launch heavy heavy -- --stall 20s
+launch killed busy -- --stall 120s
+launch term busy -- --stall 120s
+sleep 12
+echo "--- mid-run status (heavy should be waiting on the lock, 12 s with no events):"
+"$repo/scripts/agent/status" 2>/dev/null | grep -E "selftest-(heavy|killed|term) " | sed 's/  */ /g; s/^/    /' || true
+cat "$repo/.agent-runs/selftest-heavy/heavy-wait" 2>/dev/null | sed 's/^/    heavy-wait: /' || true
+# Simulate a crash or restart: SIGKILL the runner and its codex, which no trap can catch.
+killed_pid=$(cat "$repo/.agent-runs/selftest-killed/pid")
+pkill -KILL -P "$killed_pid" 2>/dev/null || true
+kill -KILL "$killed_pid"
+# A normal signal goes through the trap.
+kill -TERM "$(cat "$repo/.agent-runs/selftest-term/pid")"
+sleep 6
+echo "--- status right after the kills (should reap selftest-killed as died, exit 3):"
+set +e
+"$repo/scripts/agent/status" >"$work/status.out" 2>&1
+src=$?
+set -e
+grep -E "selftest-|resume queue|selftest-killed" "$work/status.out" | sed 's/  */ /g; s/^/    /' || true
+echo "    status exit code: $src"
+for n in heavy term; do wait "$(cat "$work/selftest-$n.launcher")" || true; done
+wait "$holder" || true
+report heavy "waiting on the heavy lock with no events is alive, not a stall"
+report killed "runner killed with SIGKILL (crash/restart) -> status marks it died and queues it"
+report term "runner receives SIGTERM -> trap writes the exit record"
+
+echo "== cleanup"
+for name in "${names[@]}"; do
+	git -C "$repo" worktree remove --force "$repo/.worktrees/$name" 2>/dev/null || true
+	git -C "$repo" branch -q -D "task/$name" 2>/dev/null || true
+	rm -rf "$repo/.agent-runs/$name"
+done
+if [[ -f $repo/.agent-runs/resume-queue ]]; then
+	grep -v ' selftest-' "$repo/.agent-runs/resume-queue" >"$work/q" || true
+	mv "$work/q" "$repo/.agent-runs/resume-queue"
+	[[ -s $repo/.agent-runs/resume-queue ]] || rm -f "$repo/.agent-runs/resume-queue"
+fi
+rm -rf "$work"
+echo "selftest: done"

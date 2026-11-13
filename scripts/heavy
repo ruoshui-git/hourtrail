@@ -1,9 +1,15 @@
 #!/usr/bin/env bash
-set -Eeuo pipefail
+set -Euo pipefail
 
 # Run one memory-heavy command (build, Playwright, screenshots) at a time across
 # all Hourtrail checkouts and task worktrees. The lock is Hourtrail's own; it is
 # not shared with other projects (owner decision, 2026-11-12).
+#
+# Heartbeats, so a long wait is never mistaken for a stall (and a real stall is
+# never hidden by one): every 30 s while waiting, this writes the waiting command
+# and the current holder to /tmp/hourtrail-heavy.waiting.d/<pid> and, inside a
+# Codex run, to $HT_RUN_DIR/heavy-wait; while holding the lock it writes
+# <lock>.holder once and, inside a run, $HT_RUN_DIR/heavy-run every 30 s.
 
 if [[ $# -eq 0 ]]; then
 	echo "Usage: heavy COMMAND [ARGS...]" >&2
@@ -11,9 +17,53 @@ if [[ $# -eq 0 ]]; then
 fi
 
 lock=${HT_HEAVY_LOCK:-/tmp/hourtrail-heavy.lock}
+holder_file=$lock.holder
+wait_dir=/tmp/hourtrail-heavy.waiting.d
+run_dir=${HT_RUN_DIR:-}
+interval=${HT_HEAVY_HEARTBEAT_S:-30}
+beat=
+files=()
+
+cleanup() {
+	if [[ -n $beat ]]; then kill "$beat" 2>/dev/null || true; fi
+	beat=
+	if ((${#files[@]})); then rm -f "${files[@]}"; fi
+	files=()
+}
+trap cleanup EXIT
+trap 'cleanup; exit 143' TERM
+trap 'cleanup; exit 130' INT
+
+heartbeat() { # heartbeat TEXT FILE...  (runs until killed)
+	local text=$1
+	shift
+	while :; do
+		for f in "$@"; do printf '%s now=%s\n' "$text" "$(date -Is)" >"$f"; done
+		sleep "$interval"
+	done
+}
+
 exec 9>>"$lock"
 if ! flock -n 9; then
-	echo "heavy: waiting for another heavy command to finish ($lock)" >&2
+	holder=$(cat "$holder_file" 2>/dev/null || echo unknown)
+	echo "heavy: waiting for the lock ($lock), held by: $holder" >&2
+	mkdir -p "$wait_dir"
+	files=("$wait_dir/$$")
+	[[ -n $run_dir && -d $run_dir ]] && files+=("$run_dir/heavy-wait")
+	heartbeat "waiting_since=$(date -Is) pid=$$ command=$* holder=[$holder]" "${files[@]}" &
+	beat=$!
 	flock 9
+	cleanup
 fi
+printf 'pid=%s run=%s since=%s command=%s\n' "$$" "${run_dir##*/}" "$(date -Is)" "$*" >"$holder_file"
+if [[ -n $run_dir && -d $run_dir ]]; then
+	files=("$run_dir/heavy-run")
+	heartbeat "running_since=$(date -Is) pid=$$ command=$*" "${files[@]}" &
+	beat=$!
+fi
+set +e
 "$@"
+rc=$?
+set -e
+cleanup
+exit "$rc"

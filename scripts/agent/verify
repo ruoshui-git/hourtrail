@@ -7,6 +7,11 @@ set -Eeuo pipefail
 # are light and run directly so they do not queue behind other projects' runs.
 #
 # Usage: verify NAME [--e2e|--no-e2e]     (NAME may be "." for the current checkout)
+#
+# Never hangs: every step has a time limit (HT_VERIFY_<STEP>_S overrides, in
+# seconds) and the whole run an overall deadline (HT_VERIFY_DEADLINE_S, default
+# 75 min). A timed-out step prints "TIMEOUT: <step>" and verify exits non-zero;
+# hitting the overall deadline exits 124 naming the step it was in.
 
 name=${1:?Usage: verify NAME [--e2e|--no-e2e]}
 e2e=auto
@@ -21,11 +26,34 @@ if [[ $name == . ]]; then dir=$(git rev-parse --show-toplevel); else dir=$repo/.
 heavy=$repo/scripts/heavy
 counts=$repo/scripts/agent/lib/test-counts.mjs
 fail=0
-step() {
-	local label=$1
-	shift
-	printf '== %s\n' "$label"
-	if (cd "$dir" && "$@"); then echo "   pass: $label"; else echo "   FAIL: $label"; fail=1; fi
+current=startup
+limit() { local var="HT_VERIFY_${1}_S"; echo "${!var:-$2}"; }
+deadline_s=${HT_VERIFY_DEADLINE_S:-4500}
+(sleep "$deadline_s" && kill -TERM $$) >/dev/null 2>&1 &
+sentinel=$!
+on_deadline() {
+	pkill -TERM -P $$ 2>/dev/null || true
+	echo "verify: FAILED: overall deadline of $((deadline_s / 60)) min ($deadline_s s) reached during step: $current"
+	exit 124
+}
+trap on_deadline TERM
+trap 'kill "$sentinel" 2>/dev/null || true; pkill -P "$sentinel" 2>/dev/null || true' EXIT
+step() { # step LABEL LIMIT_SECONDS COMMAND...
+	local label=$1 secs=$2
+	shift 2
+	current=$label
+	printf '== %s (limit %ss)\n' "$label" "$secs"
+	local rc=0
+	timeout -k 15 "$secs" bash -c 'cd "$1" && shift && "$@"' _ "$dir" "$@" || rc=$?
+	if ((rc == 0)); then
+		echo "   pass: $label"
+	elif ((rc == 124 || rc == 137)); then
+		echo "   TIMEOUT: $label did not finish within ${secs}s"
+		fail=1
+	else
+		echo "   FAIL: $label"
+		fail=1
+	fi
 }
 
 # Unit tests with a JSON report per package, then a count.
@@ -34,12 +62,13 @@ unit() {
 		pnpm -r --workspace-concurrency=1 test --reporter=dot --reporter=json \
 			--outputFile.json=.vitest-report.json)
 }
+export -f unit
 
-step "pnpm install" pnpm install --frozen-lockfile --prefer-offline --reporter=silent
-step "format" pnpm format:check
-step "lint" pnpm lint
-step "types" pnpm typecheck
-step "unit tests" unit "$dir"
+step "pnpm install" "$(limit INSTALL 600)" pnpm install --frozen-lockfile --prefer-offline --reporter=silent
+step "format" "$(limit FORMAT 300)" pnpm format:check
+step "lint" "$(limit LINT 600)" pnpm lint
+step "types" "$(limit TYPES 600)" pnpm typecheck
+step "unit tests" "$(limit UNIT 900)" unit "$dir"
 here_counts=$(node "$counts" "$dir")
 
 # Baseline: test counts at the commit this task branched from (its merge base
@@ -51,8 +80,9 @@ if [[ ! -f $cache && $dir != "$repo" ]]; then
 	mkdir -p "$(dirname "$cache")"
 	base=$(mktemp -d)
 	git -C "$repo" worktree add -q --detach "$base/main" "$main_sha"
-	(cd "$base/main" && pnpm install --frozen-lockfile --prefer-offline --reporter=silent >/dev/null 2>&1 &&
-		unit "$base/main" >/dev/null 2>&1) || true
+	current="baseline test counts"
+	timeout -k 15 "$(limit BASELINE 1200)" bash -c 'cd "$1" && pnpm install --frozen-lockfile --prefer-offline --reporter=silent && unit "$1"' _ "$base/main" >/dev/null 2>&1 ||
+		echo "   (baseline counts unavailable: install or tests failed or timed out)" 
 	node "$counts" "$base/main" >"$cache" || true
 	git -C "$repo" worktree remove --force "$base/main" || true
 	rm -rf "$base"
@@ -60,7 +90,7 @@ fi
 echo "== test counts"
 node "$counts" --compare "${cache:-/dev/null}" "$dir" || fail=1
 
-step "build" "$heavy" pnpm build
+step "build" "$(limit BUILD 1200)" "$heavy" pnpm build
 
 if [[ $e2e == auto ]]; then
 	e2e=no
@@ -70,7 +100,7 @@ if [[ $e2e == auto ]]; then
 		e2e=yes
 	fi
 fi
-[[ $e2e == yes ]] && step "e2e" "$heavy" pnpm e2e
+if [[ $e2e == yes ]]; then step "e2e" "$(limit E2E 2400)" "$heavy" pnpm e2e; fi
 
 if ((fail)); then echo "verify: FAILED"; exit 1; fi
 echo "verify: all checks passed ($here_counts)"

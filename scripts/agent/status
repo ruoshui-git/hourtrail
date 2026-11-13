@@ -1,0 +1,112 @@
+#!/usr/bin/env node
+// List every Codex run in .agent-runs/ with its state, and reap dead ones.
+// Run it first whenever you wake up (including from timers). Usage:
+//   status            table of runs; exit 3 if any run died, stalled or is overdue
+//   status --json     the same as JSON
+// States: running (live runner pid), finished (exit file; code and reason), died
+// (runner pid gone and no exit file). A died run gets exit 120 and an exit-reason,
+// and is appended to .agent-runs/resume-queue with its session for --resume.
+import { appendFileSync, existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const repo = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
+const runs = join(repo, '.agent-runs');
+const json = process.argv.includes('--json');
+const now = Date.now();
+
+const read = (p) => (existsSync(p) ? readFileSync(p, 'utf8').trim() : '');
+const mtime = (p) => (existsSync(p) ? statSync(p).mtimeMs : null);
+const alive = (pid) => {
+	try {
+		process.kill(pid, 0);
+		return true;
+	} catch (e) {
+		return e.code === 'EPERM';
+	}
+};
+const ago = (ms) => {
+	if (ms == null) return '-';
+	const s = Math.max(0, Math.round((now - ms) / 1000));
+	return s < 120 ? `${s}s` : s < 7200 ? `${Math.round(s / 60)}m` : `${(s / 3600).toFixed(1)}h`;
+};
+
+const rows = [];
+for (const name of readdirSync(runs).sort()) {
+	const dir = join(runs, name);
+	if (!statSync(dir).isDirectory() || !existsSync(join(dir, 'meta'))) continue;
+	const meta = read(join(dir, 'meta'));
+	const field = (k) => meta.match(new RegExp(`(?:^|\\s)${k}=(\\S+)`))?.[1];
+	const started = Number(field('started_epoch')) * 1000 || Date.parse(field('started') ?? '') || mtime(join(dir, 'meta'));
+	const timeoutS = Number(field('timeout_s')) || 75 * 60;
+	const stallS = Number(field('stall_s')) || 15 * 60;
+	const pid = Number(read(join(dir, 'pid'))) || null;
+	const lastEvent = mtime(join(dir, 'events.jsonl'));
+	const heavyWait = mtime(join(dir, 'heavy-wait'));
+	const heavyRun = mtime(join(dir, 'heavy-run'));
+	const fresh = (t) => t != null && now - t < 90_000;
+	const row = {
+		name,
+		model: field('model') ?? '?',
+		started,
+		age: ago(started),
+		lastEvent: ago(lastEvent),
+		phase: read(join(dir, 'phase')) || null,
+		heavy: fresh(heavyWait) ? 'waiting' : fresh(heavyRun) ? 'holding' : null,
+		state: '',
+		exit: null,
+		reason: read(join(dir, 'exit-reason')) || null,
+		flags: [],
+		session: read(join(dir, 'session')) || null,
+	};
+	if (existsSync(join(dir, 'exit'))) {
+		row.state = 'finished';
+		row.exit = Number(read(join(dir, 'exit')));
+	} else if (pid && alive(pid)) {
+		row.state = 'running';
+		const lastAlive = Math.max(lastEvent ?? 0, heavyWait ?? 0, heavyRun ?? 0, started ?? 0);
+		if (now - lastAlive > (stallS + 60) * 1000) row.flags.push('stalled');
+		if (now - started > (timeoutS + 300) * 1000) row.flags.push('overdue');
+		if (existsSync(join(dir, 'warnings'))) row.flags.push('no-progress-warning');
+	} else {
+		// Died: the runner is gone without writing its exit record (crash, kill -9, restart).
+		row.state = 'died';
+		row.exit = 120;
+		row.reason = `died: runner process ${pid ?? '?'} gone without an exit record (phase ${row.phase ?? '?'})`;
+		writeFileSync(join(dir, 'exit'), '120\n');
+		writeFileSync(join(dir, 'exit-reason'), `${row.reason}\n`);
+		if (!existsSync(join(dir, 'summary.txt')) || !read(join(dir, 'summary.txt')).includes('died')) {
+			appendFileSync(join(dir, 'summary.txt'), `codex-run ${name}: exit 120 (${row.reason})\n`);
+		}
+		const action = row.session ? `--resume ${row.session}` : 'relaunch';
+		appendFileSync(join(runs, 'resume-queue'), `${new Date(now).toISOString()} ${name} ${action}\n`);
+		row.flags.push(`queued: ${action}`);
+	}
+	rows.push(row);
+}
+
+const problems = rows.filter((r) => r.state === 'died' || r.flags.some((f) => f === 'stalled' || f === 'overdue'));
+const inFlight = rows.filter((r) => r.state === 'running').length;
+const queue = read(join(runs, 'resume-queue')).split('\n').filter(Boolean);
+
+if (json) {
+	console.log(JSON.stringify({ inFlight, problems: problems.map((r) => r.name), rows, queue }, null, 2));
+} else {
+	const line = (r) =>
+		[
+			r.state.padEnd(8),
+			r.name.padEnd(26),
+			`${r.model}`.padEnd(12),
+			`age ${r.age}`.padEnd(10),
+			`last event ${r.lastEvent}`.padEnd(17),
+			r.state === 'running' ? `phase ${r.phase ?? '?'}${r.heavy ? `, heavy lock ${r.heavy}` : ''}` : `exit ${r.exit}${r.reason ? `: ${r.reason}` : ''}`,
+			r.flags.length ? `[${r.flags.join(', ')}]` : '',
+		]
+			.join(' ')
+			.trimEnd();
+	const recent = rows.filter((r) => r.state !== 'finished' || now - r.started < 24 * 3600_000);
+	for (const r of recent) console.log(line(r));
+	if (queue.length) console.log(`resume queue (${queue.length}):\n  ${queue.join('\n  ')}`);
+	console.log(`in flight: ${inFlight}; problems: ${problems.length ? problems.map((r) => r.name).join(', ') : 'none'}`);
+}
+process.exit(problems.length ? 3 : 0);
