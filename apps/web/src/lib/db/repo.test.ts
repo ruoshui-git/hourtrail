@@ -6,6 +6,7 @@ import {
 	ENTITIES,
 	newId,
 	PERSONAL_TYPE_ID,
+	planSplit,
 	WORK_TYPE_ID,
 } from '@hourtrail/core';
 import type { AnyRecord } from '@hourtrail/core';
@@ -478,6 +479,54 @@ describe('editMany', () => {
 			]),
 		).rejects.toThrow();
 		expect((await db.project.get(a.id))?.name).toBe('A');
+		expect(await db.outbox.count()).toBe(before);
+	});
+});
+
+describe('applyPlan', () => {
+	it('applies a core split plan in one transaction and undoes it with one token', async () => {
+		const { db, repo, at } = fixture();
+		at(Date.parse('2026-11-12T13:00:00Z'));
+		const session = await repo.create('session', {
+			work_item_id: null,
+			type_id: WORK_TYPE_ID,
+			start_at: Date.parse('2026-11-12T09:00:00Z'),
+			end_at: Date.parse('2026-11-12T11:00:00Z'),
+			start_tz: 'UTC',
+			end_tz: 'UTC',
+			note: '修复洗手台',
+			source: 'manual',
+			place_id: null,
+			place_state: 'none',
+			place_candidates: [],
+			flags: {},
+			origin_device_id: 'test',
+		});
+		const result = planSplit(session, Date.parse('2026-11-12T10:00:00Z'), () => newId());
+		if (!result.ok) throw new Error(result.error);
+		const undo = await repo.applyPlan('Split', 'session', result.plan);
+		const live = (await db.session.toArray()).filter((s) => s.deleted_at === null);
+		expect(live).toHaveLength(2);
+		expect(live.map((s) => s.end_at).sort()).toEqual([
+			Date.parse('2026-11-12T10:00:00Z'),
+			Date.parse('2026-11-12T11:00:00Z'),
+		]);
+		await repo.undo(undo);
+		const after = (await db.session.toArray()).filter((s) => s.deleted_at === null);
+		expect(after).toHaveLength(1);
+		expect(after[0]).toMatchObject({ id: session.id, end_at: session.end_at, note: '修复洗手台' });
+	});
+
+	it('writes nothing when a step fails', async () => {
+		const { db, repo } = fixture();
+		const before = await db.outbox.count();
+		await expect(
+			repo.applyPlan('Merge', 'project', {
+				create: [],
+				update: [{ id: '00000000-0000-7000-8000-00000000dead', changes: { name: 'x' } }],
+				remove: [],
+			}),
+		).rejects.toThrow();
 		expect(await db.outbox.count()).toBe(before);
 	});
 });

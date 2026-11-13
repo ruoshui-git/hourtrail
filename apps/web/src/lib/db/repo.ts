@@ -52,6 +52,19 @@ export interface Repo {
 		label: string,
 		edits: { entity: Entity; id: string; changes: Record<string, unknown> }[],
 	): Promise<UndoToken>;
+	/**
+	 * Apply a core plan (for example planSplit or planMerge for sessions) in one
+	 * transaction with one undo token: creates, then updates, then removals.
+	 */
+	applyPlan<E extends Entity>(
+		label: string,
+		entity: E,
+		plan: {
+			create: (Fields<E> & { id: string })[];
+			update: { id: string; changes: Record<string, unknown> }[];
+			remove: string[];
+		},
+	): Promise<UndoToken>;
 	undo(token: UndoToken): Promise<void>;
 }
 
@@ -282,6 +295,21 @@ export function createRepo(
 					return undo;
 				},
 			),
+		applyPlan: (label, entity, plan) =>
+			transaction([entity], async (now) => {
+				const undo = token(label);
+				const ctx = await context(now);
+				for (const fields of plan.create) await create(entity, fields, ctx, undo);
+				for (const edit of plan.update) {
+					const before = (await required(entity, edit.id)) as RecordOf<typeof entity>;
+					await patch(entity, before, edit.changes as Partial<RecordOf<typeof entity>>, ctx, undo);
+				}
+				for (const id of plan.remove) {
+					await required(entity, id);
+					await write(deleteMutation(entity, id, ctx), ctx, undo);
+				}
+				return undo;
+			}),
 		undo: (undo) =>
 			transaction(
 				undo.mutations.map((m) => m.entity),
