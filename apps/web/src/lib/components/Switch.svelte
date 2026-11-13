@@ -6,11 +6,20 @@
 		label,
 		hint,
 		disabled = false,
-	}: { checked?: boolean; label: string; hint?: string; disabled?: boolean } = $props();
+		onchange,
+	}: {
+		checked?: boolean;
+		label: string;
+		hint?: string;
+		disabled?: boolean;
+		/** Called when the user toggles it (for writes that may be refused, e.g. a permission). */
+		onchange?: (checked: boolean) => void;
+	} = $props();
 </script>
 
 <Switch.Root
 	bind:checked
+	onCheckedChange={(value) => onchange?.(value)}
 	{disabled}
 	class="ht-switch-row"
 	aria-labelledby={`${uid}-label`}

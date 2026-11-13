@@ -17,12 +17,16 @@
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import { showToast } from '$lib/components/toasts.svelte';
 	import { sessionWarnings, validateSessionTimes } from './validate';
+	import { placeLabel } from '@hourtrail/core';
+	import { deleteSessionCoordinates } from '$lib/features/location/capture';
 
 	let { request, onclose }: { request: EditorRequest; onclose: () => void } = $props();
 	const sessionId = $derived(request.mode === 'edit' ? request.sessionId : null);
 	const sessions = live(() => db.session.toArray(), []);
 	const items = live(() => db.work_item.toArray(), []);
 	const types = live(() => db.activity_type.toArray(), []);
+	const places = live(() => db.place.toArray(), []);
+	const fixes = live(() => db.local_fix.toArray(), []);
 	const setting = live(() => db.setting.get('reporting_tz'), undefined);
 	const zone = $derived(
 		readSetting('reporting_tz', setting.current?.value) ??
@@ -39,6 +43,7 @@
 	let note = $state('');
 	let itemSearch = $state('');
 	let saved = $state(false);
+	let coordinatesRemovedMessage = $state(false);
 	let saveError = $state('');
 	let error = $state('');
 	let warningList = $state<string[]>([]);
@@ -97,6 +102,12 @@
 	const duration = $derived(
 		timeCheck?.ok ? sessionMinutes(timeCheck.start, timeCheck.end ?? Date.now()) : null,
 	);
+	const sessionFix = $derived(
+		session ? fixes.current.find((fix) => fix.session_id === session.id) : undefined,
+	);
+	const assignedPlace = $derived(
+		session?.place_id ? places.current.find((place) => place.id === session.place_id) : undefined,
+	);
 
 	function flashSaved() {
 		saved = true;
@@ -145,6 +156,26 @@
 			flashSaved();
 		} catch {
 			saveError = 'Could not save this change. It is still here; try again.';
+		}
+	}
+	async function assignPlace(value: string) {
+		if (!session) return;
+		await repo.update('session', session.id, {
+			place_id: value || null,
+			place_state: value ? 'set' : 'dismissed',
+			place_candidates: [],
+		});
+		flashSaved();
+	}
+	async function removeCoordinates() {
+		const targetId = request.mode === 'edit' ? request.sessionId : null;
+		if (!targetId) return;
+		coordinatesRemovedMessage = true;
+		try {
+			await deleteSessionCoordinates(targetId);
+			flashSaved();
+		} catch {
+			saveError = 'Could not remove these coordinates. Try again.';
 		}
 	}
 	async function createItem() {
@@ -297,6 +328,39 @@
 					<TextArea {...props} bind:value={note} rows={3} placeholder="Add a note" />
 				</div>{/snippet}
 		</Field>
+		{#if request.mode === 'edit' && session}
+			<Field label="Place">
+				{#snippet children(props)}
+					<div class="place-field">
+						<p>
+							{assignedPlace
+								? sessionFix
+									? placeLabel(assignedPlace.name, sessionFix.accuracy_m)
+									: assignedPlace.name
+								: 'No place assigned'}
+						</p>
+						<select
+							{...props}
+							value={session.place_id ?? ''}
+							aria-label="Choose place"
+							onchange={(event) => void assignPlace(event.currentTarget.value)}
+						>
+							<option value="">None</option>
+							{#each places.current.filter((place) => place.deleted_at === null && place.archived_at === null) as place (place.id)}
+								<option value={place.id}>{place.name}</option>
+							{/each}
+						</select>
+						<button
+							class="remove-coordinates"
+							type="button"
+							disabled={!sessionFix}
+							onclick={() => void removeCoordinates()}>Remove coordinates</button
+						>
+						{#if coordinatesRemovedMessage}<p role="status">Coordinates removed</p>{/if}
+					</div>
+				{/snippet}
+			</Field>
+		{/if}
 		{#if saved}<p class="saved" role="status">Saved</p>{/if}
 		{#if saveError}<p class="error" role="alert">{saveError}</p>{/if}
 		{#each warningList as warning (warning)}<Banner tone="caution" message={warning} />{/each}
@@ -348,6 +412,32 @@
 	.error {
 		font: var(--ht-type-label);
 		color: var(--ht-ink-2);
+	}
+
+	.place-field {
+		display: grid;
+		gap: var(--ht-space-2);
+	}
+
+	.place-field p {
+		margin: 0;
+		color: var(--ht-ink-2);
+		font: var(--ht-type-label);
+	}
+
+	.remove-coordinates {
+		justify-self: start;
+		min-height: var(--ht-target);
+		padding: var(--ht-space-2) var(--ht-space-3);
+		border: var(--ht-hairline) solid var(--ht-line-strong);
+		border-radius: var(--ht-radius-control);
+		background: transparent;
+		color: var(--ht-ink);
+		font: var(--ht-type-body-strong);
+	}
+
+	.remove-coordinates:disabled {
+		color: var(--ht-ink-3);
 	}
 
 	.error {

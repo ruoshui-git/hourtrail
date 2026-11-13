@@ -5,6 +5,8 @@
 		readSetting,
 		WORK_TYPE_ID,
 		DEFAULT_ACTIVITY_TYPES,
+		MAX_MATCH_ACCURACY_M,
+		placeLabel,
 	} from '@hourtrail/core';
 	import type { RecordOf } from '@hourtrail/core';
 	import {
@@ -31,6 +33,8 @@
 		todayTotals,
 	} from '$lib/features/home/domain';
 	import { formatClock } from '$lib/components/trail';
+	import { captureFor } from '$lib/features/location/capture';
+	import { promptChoice } from '$lib/features/location/domain';
 
 	type Session = RecordOf<'session'>;
 	type WorkItem = RecordOf<'work_item'>;
@@ -41,15 +45,16 @@
 		async () => {
 			const stored = await db.setting.get('reporting_tz');
 			const reportingZone = readSetting('reporting_tz', stored?.value) ?? deviceZone;
-			const [sessions, types, items, places] = await Promise.all([
+			const [sessions, types, items, places, fixes] = await Promise.all([
 				db.session.filter((row) => row.deleted_at === null).toArray(),
 				db.activity_type.filter((row) => row.deleted_at === null).toArray(),
 				db.work_item.filter((row) => row.deleted_at === null).toArray(),
 				db.place.filter((row) => row.deleted_at === null).toArray(),
+				db.local_fix.toArray(),
 			]);
-			return { sessions, types, items, places, reportingZone };
+			return { sessions, types, items, places, fixes, reportingZone };
 		},
-		{ sessions: [], types: [], items: [], places: [], reportingZone: deviceZone },
+		{ sessions: [], types: [], items: [], places: [], fixes: [], reportingZone: deviceZone },
 	);
 	const running = live(() => repo.running(), [] as Session[]);
 	const keepBoth = live(
@@ -62,6 +67,8 @@
 	let sheet = $state<'items' | 'types' | null>(null);
 	let sheetQuery = $state('');
 	let persistenceAsked = $state(false);
+	let placeSheet = $state<'name' | 'choose' | null>(null);
+	let newPlaceName = $state('');
 	const currentDay = $derived(dayOf(now, today.current.reportingZone));
 	const bounds = $derived(dayBounds(currentDay, today.current.reportingZone));
 	const allSessions = $derived(today.current.sessions);
@@ -118,6 +125,29 @@
 			? today.current.places.find((place) => place.id === current.place_id)?.name
 			: undefined,
 	);
+	const placePromptSession = $derived(
+		[...daySessions].reverse().find((session) => {
+			if (!promptChoice(session.place_state)) return false;
+			const fix = today.current.fixes.find((row) => row.session_id === session.id);
+			return !fix || fix.accuracy_m <= MAX_MATCH_ACCURACY_M;
+		}),
+	);
+	const placePrompt = $derived(
+		placePromptSession ? promptChoice(placePromptSession.place_state) : null,
+	);
+	const promptFix = $derived(
+		placePromptSession
+			? (today.current.fixes.find(
+					(fix) => fix.session_id === placePromptSession.id && fix.kind === 'start',
+				) ?? today.current.fixes.find((fix) => fix.session_id === placePromptSession.id))
+			: undefined,
+	);
+	const promptCandidates = $derived(
+		(placePromptSession?.place_candidates ?? [])
+			.map((id) => today.current.places.find((place) => place.id === id))
+			.filter((place) => place !== undefined),
+	);
+	const suggestedCandidate = $derived(promptCandidates[0]);
 	const ribbon = $derived(
 		todayRibbonSegments(
 			daySessions,
@@ -168,6 +198,29 @@
 		};
 	});
 
+	async function resolvePlace(placeId: string | null, state: 'set' | 'dismissed' = 'set') {
+		if (!placePromptSession) return;
+		await repo.update('session', placePromptSession.id, {
+			place_id: placeId,
+			place_state: state,
+			place_candidates: [],
+		});
+	}
+	async function createPlaceFromFix() {
+		if (!placePromptSession || !promptFix || !newPlaceName.trim()) return;
+		const place = await repo.create('place', {
+			name: newPlaceName.trim(),
+			lat: promptFix.lat,
+			lng: promptFix.lng,
+			radius_m: 100,
+			description: '',
+			archived_at: null,
+		});
+		await resolvePlace(place.id);
+		newPlaceName = '';
+		placeSheet = null;
+	}
+
 	function duration(minutes: number) {
 		const hours = Math.floor(minutes / 60);
 		const rest = minutes % 60;
@@ -189,6 +242,8 @@
 		try {
 			if (current) {
 				const result = await repo.switchTo({ workItemId: id });
+				if (result.stopped) void captureFor(result.stopped.id, 'end');
+				void captureFor(result.started.id, 'start');
 				await announceFirstSession();
 				showToast({
 					message: `Switched to ${id ? (allItems.find((item) => item.id === id)?.name ?? 'Untitled session') : 'Untitled session'}`,
@@ -196,6 +251,7 @@
 				});
 			} else {
 				const result = await repo.start({ workItemId: id });
+				if (!result.alreadyRunning) void captureFor(result.session.id, 'start');
 				if (!result.alreadyRunning) await announceFirstSession();
 			}
 			search = '';
@@ -228,6 +284,7 @@
 				await repo.update('session', current.id, { work_item_id: item.id });
 			} else {
 				const result = await repo.start({ workItemId: item.id });
+				if (!result.alreadyRunning) void captureFor(result.session.id, 'start');
 				await announceFirstSession();
 				showToast({ message: `${normalized} started.`, undo: () => repo.undo(result.undo) });
 			}
@@ -244,6 +301,7 @@
 			const normalized = name.trim();
 			if (!current) {
 				const result = await repo.startNamed(normalized);
+				void captureFor(result.session.id, 'start');
 				await announceFirstSession();
 				showToast({ message: `${normalized} started.`, undo: () => repo.undo(result.undo) });
 				search = '';
@@ -267,6 +325,8 @@
 				archived_at: null,
 			});
 			const result = await repo.switchTo({ workItemId: item.id });
+			if (result.stopped) void captureFor(result.stopped.id, 'end');
+			void captureFor(result.started.id, 'start');
 			showToast({ message: `Switched to ${item.name}`, undo: () => repo.undo(result.undo) });
 			search = '';
 			sheetQuery = '';
@@ -281,6 +341,7 @@
 		try {
 			const result = await repo.stop();
 			if (!result) return;
+			void captureFor(result.session.id, 'end');
 			const elapsed = Math.max(
 				0,
 				Math.round((result.session.end_at! - result.session.start_at) / 60_000),
@@ -422,6 +483,44 @@
 						</li>{/each}
 				</ul>{/if}
 		{/if}
+		{#if placePromptSession && placePrompt}
+			<section class="place-prompt" aria-label="Place recognition">
+				{#if placePrompt === 'suggested' && suggestedCandidate}
+					<p>
+						{promptFix
+							? placeLabel(suggestedCandidate.name, promptFix.accuracy_m)
+							: `Near ${suggestedCandidate.name}`}?
+					</p>
+					<Button variant="quiet" onclick={() => resolvePlace(suggestedCandidate.id)}
+						>Confirm</Button
+					>
+					<Button variant="quiet" onclick={() => resolvePlace(null, 'dismissed')}>Not this</Button>
+				{:else if placePrompt === 'ambiguous'}
+					<p>Choose the place you were near.</p>
+					{#each promptCandidates as candidate (candidate.id)}
+						<Button variant="quiet" onclick={() => resolvePlace(candidate.id)}
+							>{candidate.name}</Button
+						>
+					{/each}
+				{:else}
+					<p>Name this place</p>
+					{#if promptFix && promptFix.accuracy_m <= 150}
+						<Button variant="quiet" onclick={() => (placeSheet = 'name')}>Name this place</Button>
+					{/if}
+					<Button variant="quiet" onclick={() => (placeSheet = 'choose')}>Choose a place</Button>
+					<Button variant="quiet" onclick={() => resolvePlace(null, 'dismissed')}
+						>Leave unnamed</Button
+					>
+					<Button
+						variant="quiet"
+						onclick={() =>
+							placePromptSession &&
+							void repo.update('session', placePromptSession.id, { place_state: 'unresolved' })}
+						>Later</Button
+					>
+				{/if}
+			</section>
+		{/if}
 		<section class="today-summary">
 			<h2>Today</h2>
 			<p>
@@ -536,6 +635,42 @@
 	{/if}
 </Sheet>
 
+<Sheet
+	open={placeSheet !== null}
+	title={placeSheet === 'name' ? 'Name this place' : 'Choose a place'}
+	onclose={() => (placeSheet = null)}
+>
+	{#if placeSheet === 'name'}
+		<Field label="Place name">
+			{#snippet children(props)}<TextInput
+					{...props}
+					bind:value={newPlaceName}
+					placeholder="Place name"
+				/>{/snippet}
+		</Field>
+		<Button wide disabled={!newPlaceName.trim() || !promptFix} onclick={createPlaceFromFix}
+			>Save place</Button
+		>
+	{:else}
+		{#each today.current.places.filter((place) => place.deleted_at === null && place.archived_at === null) as place (place.id)}
+			<Button
+				variant="quiet"
+				onclick={() => {
+					void resolvePlace(place.id);
+					placeSheet = null;
+				}}>{place.name}</Button
+			>
+		{/each}
+		<Button
+			variant="quiet"
+			onclick={() => {
+				void resolvePlace(null);
+				placeSheet = null;
+			}}>None</Button
+		>
+	{/if}
+</Sheet>
+
 <style>
 	.status {
 		font: var(--ht-type-body-strong);
@@ -545,6 +680,21 @@
 	.home-grid {
 		display: grid;
 		gap: var(--ht-space-6);
+	}
+
+	.place-prompt {
+		display: flex;
+		align-items: center;
+		flex-wrap: wrap;
+		gap: var(--ht-space-2);
+		padding: var(--ht-space-3) 0;
+		border-bottom: var(--ht-hairline) solid var(--ht-line);
+		color: var(--ht-ink-2);
+		font: var(--ht-type-label);
+	}
+
+	.place-prompt p {
+		margin: 0;
 	}
 
 	.summary,
