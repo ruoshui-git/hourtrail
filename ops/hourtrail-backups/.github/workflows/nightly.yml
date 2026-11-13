@@ -17,6 +17,9 @@ permissions:
 
 jobs:
   backup:
+    # Scheduled runs start only once production serves the backup routes (Gate 3): the
+    # orchestrator then sets the repo variable NIGHTLY_ENABLED=true. Manual runs always work.
+    if: github.event_name != 'schedule' || vars.NIGHTLY_ENABLED == 'true'
     runs-on: ubuntu-latest
     concurrency:
       group: nightly-${{ github.event_name == 'schedule' && 'production' || inputs.env }}
