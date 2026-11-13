@@ -48,6 +48,8 @@ Gate 0 status (2026-11-12): automated part passed. Gallery screenshots in all fo
 | 2.6 | Search and filters; desktop two-pane History                                              | Luna high                       | done (Luna, one fix round; review: DST test, plural)       |
 | 2.7 | Desktop layout pass across all screens                                                    | Luna medium, your visual review | done (Luna)                                                |
 
+Gate 2 status (2026-11-12): automated part passed (scenario E with mocked geolocation: sure, suggested, ambiguous, unresolved, low accuracy, denied, timed out; Start never waits on a provider that never returns; review flows; CI green on 6470aee). Production deployed from 6470aee. Owner check pending: location recognition on the real phone.
+
 **Gate 2:** scenario E with mocked geolocation (sure, suggested, ambiguous, unresolved, low accuracy, denied, timed out) and on the real phone; review flows; Start never waits on GPS (test with a geolocation call that never returns).
 
 ## Milestone 3: cloud

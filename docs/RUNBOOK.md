@@ -87,3 +87,4 @@ Anything recorded on the lost phone that never synced is gone unless a backup fi
 1. On any still-signed-in device, keep using the app; existing device sessions stay valid.
 2. Rotate: the owner runs `scripts/setup-account --env production` again (new key, new hash secret). Existing device sessions are unaffected because they are separate tokens; revoke any you do not recognise.
 3. If no device is signed in, rotate the key, then sign in again on each device. Data is untouched.
+   | 2026-11-12 | production | 6470aee | Milestone 2 (daily organisation) after Gate 2's automated checks |

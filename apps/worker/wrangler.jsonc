@@ -14,12 +14,37 @@
     "run_worker_first": ["/api/*"],
   },
   "observability": { "enabled": true },
+  // Local dev and tests use a local SQLite copy of this binding.
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "hourtrail-staging",
+      "database_id": "cd846a93-643d-48fe-a999-dfe69275b144",
+      "migrations_dir": "migrations",
+    },
+  ],
   "env": {
     "staging": {
       "name": "hourtrail-staging",
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "hourtrail-staging",
+          "database_id": "cd846a93-643d-48fe-a999-dfe69275b144",
+          "migrations_dir": "migrations",
+        },
+      ],
     },
     "production": {
       "name": "hourtrail",
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "hourtrail-production",
+          "database_id": "e22627b5-7a3d-4c7c-9def-522f49648e17",
+          "migrations_dir": "migrations",
+        },
+      ],
     },
   },
 }
