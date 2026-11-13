@@ -15,11 +15,13 @@ worker_env=$env_name
 repo_secret=BACKUP_HEARTBEAT_SECRET
 if [[ "$env_name" == staging ]]; then repo_secret=BACKUP_HEARTBEAT_SECRET_STAGING; fi
 if $dry_run; then
-	printf 'pnpm exec wrangler secret put BACKUP_HEARTBEAT_SECRET --env %s\n' "$worker_env"
+	printf '(cd apps/worker && pnpm exec wrangler secret put BACKUP_HEARTBEAT_SECRET --env %s)\n' "$worker_env"
 	printf 'gh secret set %s -R ruoshui-git/hourtrail-backups\n' "$repo_secret"
 	exit 0
 fi
 secret="$(openssl rand -hex 32)"
-printf '%s' "$secret" | pnpm exec wrangler secret put BACKUP_HEARTBEAT_SECRET --env "$worker_env"
+# Run wrangler from apps/worker: the repo root has no wrangler, and pnpm would fall back to
+# the global (Windows) binary, which fails under WSL.
+printf '%s' "$secret" | (cd "$(dirname "${BASH_SOURCE[0]}")/../apps/worker" && pnpm exec wrangler secret put BACKUP_HEARTBEAT_SECRET --env "$worker_env")
 printf '%s' "$secret" | gh secret set "$repo_secret" -R ruoshui-git/hourtrail-backups
 unset secret
