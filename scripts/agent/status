@@ -6,7 +6,14 @@
 // States: running (live runner pid), finished (exit file; code and reason), died
 // (runner pid gone and no exit file). A died run gets exit 120 and an exit-reason,
 // and is appended to .agent-runs/resume-queue with its session for --resume.
-import { appendFileSync, existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import {
+	appendFileSync,
+	existsSync,
+	readdirSync,
+	readFileSync,
+	statSync,
+	writeFileSync,
+} from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -37,7 +44,10 @@ for (const name of readdirSync(runs).sort()) {
 	if (!statSync(dir).isDirectory() || !existsSync(join(dir, 'meta'))) continue;
 	const meta = read(join(dir, 'meta'));
 	const field = (k) => meta.match(new RegExp(`(?:^|\\s)${k}=(\\S+)`))?.[1];
-	const started = Number(field('started_epoch')) * 1000 || Date.parse(field('started') ?? '') || mtime(join(dir, 'meta'));
+	const started =
+		Number(field('started_epoch')) * 1000 ||
+		Date.parse(field('started') ?? '') ||
+		mtime(join(dir, 'meta'));
 	const timeoutS = Number(field('timeout_s')) || 75 * 60;
 	const stallS = Number(field('stall_s')) || 15 * 60;
 	const pid = Number(read(join(dir, 'pid'))) || null;
@@ -79,18 +89,25 @@ for (const name of readdirSync(runs).sort()) {
 			appendFileSync(join(dir, 'summary.txt'), `codex-run ${name}: exit 120 (${row.reason})\n`);
 		}
 		const action = row.session ? `--resume ${row.session}` : 'relaunch';
-		appendFileSync(join(runs, 'resume-queue'), `${new Date(now).toISOString()} ${name} ${action}\n`);
+		appendFileSync(
+			join(runs, 'resume-queue'),
+			`${new Date(now).toISOString()} ${name} ${action}\n`,
+		);
 		row.flags.push(`queued: ${action}`);
 	}
 	rows.push(row);
 }
 
-const problems = rows.filter((r) => r.state === 'died' || r.flags.some((f) => f === 'stalled' || f === 'overdue'));
+const problems = rows.filter(
+	(r) => r.state === 'died' || r.flags.some((f) => f === 'stalled' || f === 'overdue'),
+);
 const inFlight = rows.filter((r) => r.state === 'running').length;
 const queue = read(join(runs, 'resume-queue')).split('\n').filter(Boolean);
 
 if (json) {
-	console.log(JSON.stringify({ inFlight, problems: problems.map((r) => r.name), rows, queue }, null, 2));
+	console.log(
+		JSON.stringify({ inFlight, problems: problems.map((r) => r.name), rows, queue }, null, 2),
+	);
 } else {
 	const line = (r) =>
 		[
@@ -99,7 +116,9 @@ if (json) {
 			`${r.model}`.padEnd(12),
 			`age ${r.age}`.padEnd(10),
 			`last event ${r.lastEvent}`.padEnd(17),
-			r.state === 'running' ? `phase ${r.phase ?? '?'}${r.heavy ? `, heavy lock ${r.heavy}` : ''}` : `exit ${r.exit}${r.reason ? `: ${r.reason}` : ''}`,
+			r.state === 'running'
+				? `phase ${r.phase ?? '?'}${r.heavy ? `, heavy lock ${r.heavy}` : ''}`
+				: `exit ${r.exit}${r.reason ? `: ${r.reason}` : ''}`,
 			r.flags.length ? `[${r.flags.join(', ')}]` : '',
 		]
 			.join(' ')
@@ -107,6 +126,8 @@ if (json) {
 	const recent = rows.filter((r) => r.state !== 'finished' || now - r.started < 24 * 3600_000);
 	for (const r of recent) console.log(line(r));
 	if (queue.length) console.log(`resume queue (${queue.length}):\n  ${queue.join('\n  ')}`);
-	console.log(`in flight: ${inFlight}; problems: ${problems.length ? problems.map((r) => r.name).join(', ') : 'none'}`);
+	console.log(
+		`in flight: ${inFlight}; problems: ${problems.length ? problems.map((r) => r.name).join(', ') : 'none'}`,
+	);
 }
 process.exit(problems.length ? 3 : 0);
