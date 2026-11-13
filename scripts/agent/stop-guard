@@ -1,0 +1,69 @@
+#!/usr/bin/env node
+// Claude Code Stop hook: stop the orchestrator from going idle with nothing to wake it.
+// The harness only re-invokes Claude on a user message or when a background task exits.
+// If Claude ends its turn with no Codex run and no background agent script in flight,
+// nobody wakes it and the build silently stalls (this happened after Milestone 2).
+//
+// Blocks the stop (once per stop attempt; stop_hook_active lets the retry through) when:
+//   - no Codex run is in flight (scripts/agent/status --json), and
+//   - no codex-run / verify / land / watch-runs / heavy process is running, and
+//   - docs/PROGRESS.md still has a `todo` task, and
+//   - .agent-runs/PAUSE does not exist.
+// To pause on purpose (waiting on the owner), write the reason to .agent-runs/PAUSE;
+// delete it when work resumes.
+import { execFileSync } from 'node:child_process';
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const repo = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
+let input = {};
+try {
+	input = JSON.parse(readFileSync(0, 'utf8') || '{}');
+} catch {}
+if (input.stop_hook_active) process.exit(0);
+
+const pause = join(repo, '.agent-runs', 'PAUSE');
+if (existsSync(pause)) process.exit(0);
+
+let inFlight = 0;
+try {
+	inFlight = JSON.parse(
+		execFileSync(join(repo, 'scripts/agent/status'), ['--json'], { encoding: 'utf8' }),
+	).inFlight;
+} catch (e) {
+	// status exits 3 when a run died or stalled; it still prints JSON.
+	try {
+		inFlight = JSON.parse(e.stdout).inFlight;
+	} catch {}
+}
+if (inFlight > 0) process.exit(0);
+
+let busy = '';
+try {
+	busy = execFileSync(
+		'pgrep',
+		['-af', `${repo}/scripts/(agent/(codex-run|verify|land|watch-runs)|heavy)`],
+		{ encoding: 'utf8' },
+	).trim();
+} catch {}
+if (busy) process.exit(0);
+
+const progress = readFileSync(join(repo, 'docs/PROGRESS.md'), 'utf8');
+const todo = progress
+	.split('\n')
+	.filter((l) => /^\|\s*\d+\.\d+\w*\s*\|.*\|\s*todo\s*\|\s*$/.test(l))
+	.map((l) => l.split('|')[1].trim());
+if (todo.length === 0) process.exit(0);
+
+process.stdout.write(
+	JSON.stringify({
+		decision: 'block',
+		reason:
+			`Nothing is in flight (no Codex run, no verify/land/watch-runs/heavy process), so ending the turn ` +
+			`now stalls the build until the owner writes again. Open tasks in PROGRESS.md: ${todo.join(', ')}. ` +
+			`Standing approval says keep building through gates: launch the next task (codex-run in the ` +
+			`background, plus watch-runs) before ending the turn. If you are genuinely blocked on the owner, ` +
+			`write the reason to .agent-runs/PAUSE and say so in your reply.`,
+	}),
+);
