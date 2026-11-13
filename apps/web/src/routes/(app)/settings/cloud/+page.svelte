@@ -15,6 +15,7 @@
 		Sheet,
 		TextInput,
 	} from '$lib/components';
+	import SyncControl from '$lib/features/sync/ui/SyncControl.svelte';
 	import { auth } from '$lib/features/cloud/auth.svelte';
 	import {
 		formatLastSeen,
@@ -191,6 +192,7 @@
 	</form>
 {:else}
 	<p class="signed">Signed in as {auth.device?.name}</p>
+	<SyncControl />
 	{#if refreshError}<Banner tone="caution" message={refreshError} />{/if}
 	<section aria-label="Devices">
 		{#each auth.devices as device (device.id)}

@@ -13,6 +13,7 @@ import {
 } from '@hourtrail/core';
 import type { AnyRecord, Entity, Mutation, RecordOf } from '@hourtrail/core';
 import type { HourtrailDB } from './schema';
+import { clockSuspect } from '$lib/features/clock/clock';
 
 export type Clock = () => number;
 export type UndoToken = { label: string; mutations: Mutation[]; before: (AnyRecord | null)[] };
@@ -68,7 +69,7 @@ export interface Repo {
 	undo(token: UndoToken): Promise<void>;
 }
 
-type Context = { now: number; deviceId: string };
+type Context = { now: number; deviceId: string; clockSuspect: boolean };
 const token = (label: string): UndoToken => ({ label, mutations: [], before: [] });
 
 export function createRepo(
@@ -76,12 +77,16 @@ export function createRepo(
 	clock: Clock = Date.now,
 	zone: () => string = () => Intl.DateTimeFormat().resolvedOptions().timeZone,
 ): Repo {
-	function transaction<T>(entities: Entity[], action: (now: number) => Promise<T>): Promise<T> {
+	function transaction<T>(
+		entities: Entity[],
+		action: (now: number, suspect: boolean) => Promise<T>,
+	): Promise<T> {
 		const stores = [...new Set([...entities, 'conflict', 'outbox', 'local'])];
+		const suspect = clockSuspect();
 		return db.transaction(
 			'rw',
 			stores.map((name) => db.table(name)),
-			async () => await action(clock()),
+			async () => await action(clock(), suspect),
 		);
 	}
 
@@ -97,8 +102,8 @@ export function createRepo(
 		await db.local.put({ key: 'device_id', value: id });
 		return id;
 	}
-	async function context(now: number): Promise<Context> {
-		return { now, deviceId: await identity(now) };
+	async function context(now: number, suspect = clockSuspect()): Promise<Context> {
+		return { now, deviceId: await identity(now), clockSuspect: suspect };
 	}
 	async function required(entity: Entity, id: string): Promise<AnyRecord> {
 		const record = await db.entity(entity).get(id);
@@ -174,7 +179,7 @@ export function createRepo(
 				place_id: null,
 				place_state: 'none',
 				place_candidates: [],
-				flags: {},
+				flags: ctx.clockSuspect ? { clock_suspect: true } : {},
 				origin_device_id: ctx.deviceId,
 			},
 			ctx,
@@ -182,7 +187,17 @@ export function createRepo(
 		);
 	}
 	async function stop(session: Session, ctx: Context, undo: UndoToken): Promise<Session> {
-		return (await patch('session', session, { end_at: ctx.now, end_tz: zone() }, ctx, undo))!;
+		return (await patch(
+			'session',
+			session,
+			{
+				end_at: ctx.now,
+				end_tz: zone(),
+				...(ctx.clockSuspect ? { flags: { ...session.flags, clock_suspect: true } } : {}),
+			},
+			ctx,
+			undo,
+		))!;
 	}
 
 	return {
@@ -191,7 +206,7 @@ export function createRepo(
 			transaction(['activity_type'], async (now) => {
 				for (const type of DEFAULT_ACTIVITY_TYPES) {
 					if (await db.activity_type.get(type.id)) continue;
-					const ctx = { now: 0, deviceId: await identity(now) };
+					const ctx = { now: 0, deviceId: await identity(now), clockSuspect: false };
 					await write(putMutation('activity_type', { ...type, updated_by: ctx.deviceId }, ctx), {
 						...ctx,
 						now,
@@ -232,17 +247,17 @@ export function createRepo(
 			}),
 		running,
 		start: (opts = {}) =>
-			transaction(['session', 'work_item'], async (now) => {
+			transaction(['session', 'work_item'], async (now, suspect) => {
 				const undo = token('Start');
 				const current = (await running())[0];
 				if (current) return { session: current, undo, alreadyRunning: true };
-				const session = await start(opts.workItemId ?? null, await context(now), undo);
+				const session = await start(opts.workItemId ?? null, await context(now, suspect), undo);
 				return { session, undo, alreadyRunning: false };
 			}),
 		startNamed: (name) =>
-			transaction(['session', 'work_item'], async (now) => {
+			transaction(['session', 'work_item'], async (now, suspect) => {
 				const undo = token('Start');
-				const ctx = await context(now);
+				const ctx = await context(now, suspect);
 				let workItem = await db.work_item
 					.where('name')
 					.equals(name)
@@ -267,16 +282,16 @@ export function createRepo(
 				return { session, workItem, undo };
 			}),
 		stop: () =>
-			transaction(['session'], async (now) => {
+			transaction(['session'], async (now, suspect) => {
 				const current = (await running()).at(-1);
 				if (!current) return null;
 				const undo = token('Stop');
-				return { session: await stop(current, await context(now), undo), undo };
+				return { session: await stop(current, await context(now, suspect), undo), undo };
 			}),
 		switchTo: (opts) =>
-			transaction(['session', 'work_item'], async (now) => {
+			transaction(['session', 'work_item'], async (now, suspect) => {
 				const undo = token('Switch');
-				const ctx = await context(now);
+				const ctx = await context(now, suspect);
 				const current = (await running()).at(-1);
 				const stopped = current ? await stop(current, ctx, undo) : null;
 				const started = await start(opts.workItemId, ctx, undo);

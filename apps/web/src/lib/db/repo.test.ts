@@ -14,6 +14,7 @@ import { createRepo } from './repo';
 import type { UndoToken } from './repo';
 import { openDb } from './schema';
 import type { HourtrailDB } from './schema';
+import { setClockOffset } from '$lib/features/clock/clock';
 // Reuse the existing core test dependency; this task may not change manifests.
 import fc from 'fast-check';
 
@@ -41,6 +42,7 @@ function fixture() {
 }
 afterEach(async () => {
 	vi.restoreAllMocks();
+	setClockOffset(0);
 	await Promise.all(databases.splice(0).map((db) => db.delete()));
 });
 const itemFields = (name: string) => ({
@@ -73,6 +75,33 @@ async function assertReplay(db: HourtrailDB) {
 }
 
 describe('repository transactions', () => {
+	it('flags sessions started or stopped while the device clock is suspect', async () => {
+		const { repo, at } = fixture();
+		setClockOffset(3 * 60_000);
+		const flagged = await repo.start();
+		expect(flagged.session.flags.clock_suspect).toBe(true);
+		setClockOffset(0);
+		at(2000);
+		const stopped = await repo.stop();
+		expect(stopped?.session.flags.clock_suspect).toBe(true);
+		setClockOffset(0);
+		await repo.start();
+		setClockOffset(3 * 60_000);
+		const stoppedWithSuspectClock = await repo.stop();
+		expect(stoppedWithSuspectClock?.session.flags.clock_suspect).toBe(true);
+
+		const other = openDb(`repo-${newId()}`);
+		databases.push(other);
+		const normal = createRepo(
+			other,
+			() => 1000,
+			() => 'UTC',
+		);
+		setClockOffset(60_000);
+		const ordinary = await normal.start();
+		expect(ordinary.session.flags.clock_suspect).toBeUndefined();
+	});
+
 	it('starts once, persists every session field and ignores a second tap', async () => {
 		const { db, repo, at } = fixture();
 		const first = await repo.start();

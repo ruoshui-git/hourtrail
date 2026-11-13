@@ -52,6 +52,8 @@
 		};
 	}
 	const data = live(loadData, initial);
+	const outbox = live(() => db.outbox.toArray(), []);
+	const pendingIds = $derived(new Set(outbox.current.map((row) => row.mutation.record_id)));
 	let snapshot = $state(initial);
 	$effect(() => {
 		if (data.current.items.length || data.current.projects.length) snapshot = data.current;
@@ -148,15 +150,23 @@
 {:else}
 	{#if pinned.length}<section>
 			<h2>Pinned</h2>
-			{#each pinned as item (item.id)}{@const type = typeFor(item.type_id)}{#if type}<WorkItemRow
-						name={item.name}
-						typeName={type.name}
-						typeColor={type.color}
-						projectName={projectFor(item.project_id)?.name}
-						pinned
-						onstart={() => startItem(item)}
-						onopen={() => goto(resolve(`/items/${item.id}`))}
-					/>{/if}{/each}
+			{#each pinned as item (item.id)}{@const type = typeFor(item.type_id)}{#if type}<div
+						class="pending-row"
+					>
+						<WorkItemRow
+							name={item.name}
+							typeName={type.name}
+							typeColor={type.color}
+							projectName={projectFor(item.project_id)?.name}
+							pinned
+							onstart={() => startItem(item)}
+							onopen={() => goto(resolve(`/items/${item.id}`))}
+						/>{#if pendingIds.has(item.id)}<span
+								class="pending-dot"
+								role="img"
+								aria-label="Not backed up yet"
+							></span>{/if}
+					</div>{/if}{/each}
 		</section>{/if}
 	{#each snapshot.projects.filter((p) => p.archived_at === null) as project (project.id)}
 		{@const rows = itemsFor(project.id)}{#if rows.length}<section>
@@ -183,25 +193,41 @@
 						]}
 					/>
 				</div>
-				{#each rows as item (item.id)}{@const type = typeFor(item.type_id)}{#if type}<WorkItemRow
-							name={item.name}
-							typeName={type.name}
-							typeColor={type.color}
-							projectName={project.name}
-							onstart={() => startItem(item)}
-							onopen={() => goto(resolve(`/items/${item.id}`))}
-						/>{/if}{/each}
+				{#each rows as item (item.id)}{@const type = typeFor(item.type_id)}{#if type}<div
+							class="pending-row"
+						>
+							<WorkItemRow
+								name={item.name}
+								typeName={type.name}
+								typeColor={type.color}
+								projectName={project.name}
+								onstart={() => startItem(item)}
+								onopen={() => goto(resolve(`/items/${item.id}`))}
+							/>{#if pendingIds.has(item.id)}<span
+									class="pending-dot"
+									role="img"
+									aria-label="Not backed up yet"
+								></span>{/if}
+						</div>{/if}{/each}
 			</section>{/if}
 	{/each}
 	{@const noProject = itemsFor(null)}{#if noProject.length}<section>
 			<h2>No project</h2>
-			{#each noProject as item (item.id)}{@const type = typeFor(item.type_id)}{#if type}<WorkItemRow
-						name={item.name}
-						typeName={type.name}
-						typeColor={type.color}
-						onstart={() => startItem(item)}
-						onopen={() => goto(resolve(`/items/${item.id}`))}
-					/>{/if}{/each}
+			{#each noProject as item (item.id)}{@const type = typeFor(item.type_id)}{#if type}<div
+						class="pending-row"
+					>
+						<WorkItemRow
+							name={item.name}
+							typeName={type.name}
+							typeColor={type.color}
+							onstart={() => startItem(item)}
+							onopen={() => goto(resolve(`/items/${item.id}`))}
+						/>{#if pendingIds.has(item.id)}<span
+								class="pending-dot"
+								role="img"
+								aria-label="Not backed up yet"
+							></span>{/if}
+					</div>{/if}{/each}
 		</section>{/if}
 	<section>
 		<button
@@ -210,14 +236,20 @@
 			aria-expanded={archivedOpen}>Archived ({archived.length})</button
 		>{#if archivedOpen}{#each archived as item (item.id)}{@const type = typeFor(
 					item.type_id,
-				)}{#if type}<WorkItemRow
-						name={item.name}
-						typeName={type.name}
-						typeColor={type.color}
-						projectName={projectFor(item.project_id)?.name}
-						onstart={() => startItem(item)}
-						onopen={() => goto(resolve(`/items/${item.id}`))}
-					/>{/if}{/each}{#if archived.length === 0}<p>No archived work items.</p>{/if}{/if}
+				)}{#if type}<div class="pending-row">
+						<WorkItemRow
+							name={item.name}
+							typeName={type.name}
+							typeColor={type.color}
+							projectName={projectFor(item.project_id)?.name}
+							onstart={() => startItem(item)}
+							onopen={() => goto(resolve(`/items/${item.id}`))}
+						/>{#if pendingIds.has(item.id)}<span
+								class="pending-dot"
+								role="img"
+								aria-label="Not backed up yet"
+							></span>{/if}
+					</div>{/if}{/each}{#if archived.length === 0}<p>No archived work items.</p>{/if}{/if}
 	</section>
 {/if}
 <Sheet bind:open={adding} title="Add work item" onclose={() => (adding = false)}
@@ -290,6 +322,22 @@
 	section {
 		max-width: var(--ht-content-max);
 		margin-block: var(--ht-space-5);
+	}
+
+	.pending-row {
+		position: relative;
+	}
+
+	.pending-dot {
+		position: absolute;
+		top: 50%;
+		right: calc(2 * var(--ht-target) + var(--ht-space-1) + var(--ht-space-3));
+		width: var(--ht-space-2);
+		height: var(--ht-space-2);
+		transform: translateY(-50%);
+		border: var(--ht-hairline) solid var(--ht-ink-2);
+		border-radius: var(--ht-radius-chip);
+		pointer-events: none;
 	}
 
 	.search {

@@ -25,6 +25,7 @@
 		WorkItemRow,
 		showToast,
 	} from '$lib/components';
+	import SyncControl from '$lib/features/sync/ui/SyncControl.svelte';
 	import { db, repo } from '$lib/db/app';
 	import { live } from '$lib/live.svelte';
 	import { requestPersistence } from '$lib/pwa/persist';
@@ -39,6 +40,7 @@
 	import { formatClock } from '$lib/components/trail';
 	import { captureFor } from '$lib/features/location/capture';
 	import { promptChoice } from '$lib/features/location/domain';
+	import { clockOffsetMinutes, observeClock, setClockOffset } from '$lib/features/clock/clock';
 
 	type Session = RecordOf<'session'>;
 	type WorkItem = RecordOf<'work_item'>;
@@ -61,6 +63,8 @@
 				conflicts,
 				marks,
 				dayReviews,
+				outbox,
+				clockRow,
 			] = await Promise.all([
 				db.session.filter((row) => row.deleted_at === null).toArray(),
 				db.activity_type.filter((row) => row.deleted_at === null).toArray(),
@@ -73,7 +77,10 @@
 				db.conflict.toArray(),
 				db.review_mark.toArray(),
 				db.day_review.toArray(),
+				db.outbox.toArray(),
+				db.local.get('clock_offset_ms'),
 			]);
+			setClockOffset(clockRow?.value);
 			return {
 				sessions,
 				types,
@@ -87,6 +94,8 @@
 				longGap: readSetting('long_gap_min', gapSetting?.value) ?? 60,
 				longSession: readSetting('long_session_min', longSetting?.value) ?? 600,
 				notePrompt: readSetting('note_prompt', noteSetting?.value) ?? 'work',
+				outbox,
+				clockOffsetMs: typeof clockRow?.value === 'number' ? clockRow.value : 0,
 			};
 		},
 		{
@@ -99,6 +108,8 @@
 			conflicts: [],
 			marks: [],
 			dayReviews: [],
+			outbox: [],
+			clockOffsetMs: 0,
 			longGap: 60,
 			longSession: 600,
 			notePrompt: 'work' as const,
@@ -118,6 +129,10 @@
 	let placeSheet = $state<'name' | 'choose' | null>(null);
 	let newPlaceName = $state('');
 	const currentDay = $derived(dayOf(now, today.current.reportingZone));
+	const clockCaution = $derived(clockOffsetMinutes(today.current.clockOffsetMs));
+	const pendingKeys = $derived(
+		new Set(today.current.outbox.map(({ mutation }) => `${mutation.entity}:${mutation.record_id}`)),
+	);
 	const bounds = $derived(dayBounds(currentDay, today.current.reportingZone));
 	const allSessions = $derived(today.current.sessions);
 	const daySessions = $derived(
@@ -259,7 +274,11 @@
 	);
 
 	$effect(() => {
-		const refresh = () => (now = Date.now());
+		const refresh = () => {
+			now = Date.now();
+			observeClock(Date.now(), performance.now(), running.current.length > 0);
+		};
+		observeClock(Date.now(), performance.now(), running.current.length > 0);
 		const id = setInterval(refresh, 1000);
 		document.addEventListener('visibilitychange', refresh);
 		window.addEventListener('pageshow', refresh);
@@ -480,14 +499,25 @@
 
 <svelte:head><title>Today · Hourtrail</title></svelte:head>
 <header class="page-header">
-	<h1>
-		{new Intl.DateTimeFormat(undefined, {
-			weekday: 'short',
-			day: 'numeric',
-			month: 'short',
-		}).format(now)}
-	</h1>
+	<div class="date-line">
+		<h1>
+			{new Intl.DateTimeFormat(undefined, {
+				weekday: 'short',
+				day: 'numeric',
+				month: 'short',
+			}).format(now)}
+		</h1>
+		<!-- Phones show the badge here; desktop shows it in the sidebar footer instead. -->
+		<div class="home-sync"><SyncControl /></div>
+	</div>
 </header>
+
+{#if clockCaution}
+	<Banner
+		tone="caution"
+		message={`This device's clock is ${clockCaution.minutes} minutes ${clockCaution.direction}. Sessions started or stopped now are marked for review.`}
+	/>
+{/if}
 
 <div class="home-grid">
 	<section class="summary" aria-label="Today">
@@ -625,6 +655,7 @@
 							typeName={type.name}
 							typeColor={type.color}
 							pinned
+							pending={pendingKeys.has(`work_item:${item.id}`)}
 							disabled={busy}
 							onstart={() => startItem(item.id)}
 							onopen={() => itemName(item)}
@@ -638,6 +669,7 @@
 							name={item.name}
 							typeName={type.name}
 							typeColor={type.color}
+							pending={pendingKeys.has(`work_item:${item.id}`)}
 							disabled={busy}
 							onstart={() => startItem(item.id)}
 							onopen={() => itemName(item)}
@@ -755,9 +787,20 @@
 		margin-bottom: var(--ht-space-4);
 	}
 
+	.date-line {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--ht-space-3);
+	}
+
 	h1 {
 		margin: 0;
 		font: var(--ht-type-title);
+	}
+
+	.date-line h1 {
+		white-space: nowrap;
 	}
 
 	.status {
@@ -853,6 +896,10 @@
 	}
 
 	@media (width >= 1024px) {
+		.home-sync {
+			display: none;
+		}
+
 		.home-grid {
 			grid-template-columns: minmax(0, 1fr) minmax(0, 0.8fr);
 			align-items: start;

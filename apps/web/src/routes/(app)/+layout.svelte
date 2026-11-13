@@ -7,12 +7,16 @@
 	import { prepareLocalData } from '$lib/db/app';
 	import { auth } from '$lib/features/cloud/auth.svelte';
 	import { sync } from '$lib/features/sync/engine.svelte';
+	import SyncControl from '$lib/features/sync/ui/SyncControl.svelte';
+	import { db } from '$lib/db/app';
+	import { setClockOffset } from '$lib/features/clock/clock';
 
 	let { children }: { children: Snippet } = $props();
 
 	// Seed default types and the reporting zone once, outside any live query.
 	$effect(() => {
 		void prepareLocalData();
+		void db.local.get('clock_offset_ms').then((row) => setClockOffset(row?.value));
 	});
 	$effect(() => {
 		if (
@@ -31,7 +35,11 @@
 </script>
 
 <div class="frame">
-	<aside class="desktop-nav"><Sidebar {current} /></aside>
+	<aside class="desktop-nav">
+		<Sidebar {current}>
+			{#snippet footer()}<SyncControl />{/snippet}
+		</Sidebar>
+	</aside>
 	<main>{@render children()}</main>
 	<SessionEditorHost />
 	<div class="mobile-nav"><TabBar {current} /></div>
