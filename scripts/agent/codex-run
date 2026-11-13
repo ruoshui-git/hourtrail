@@ -51,6 +51,7 @@ seconds() { # minutes, or Ns
 		exit 2
 	fi
 }
+human() { if (($1 < 120)); then echo "$1 s"; else echo "$(($1 / 60)) min"; fi; }
 model=gpt-6-luna
 effort=medium
 mode=()
@@ -186,7 +187,7 @@ write_meta
 # Outer deadline: one sentinel for the whole runner, setup to summary.
 (sleep "$deadline_s" && echo deadline >"$run/deadline-hit" && kill -TERM $$) >/dev/null 2>&1 &
 sentinel=$!
-trap 'if [[ -f $run/deadline-hit ]]; then finish 126 "outer deadline of $((deadline_s / 60)) min reached during $phase"; else finish 143 "runner killed by signal TERM during $phase"; fi' TERM
+trap 'if [[ -f $run/deadline-hit ]]; then finish 126 "outer deadline of $(human "$deadline_s") reached during $phase"; else finish 143 "runner killed by signal TERM during $phase"; fi' TERM
 rm -f "$run/deadline-hit"
 
 # Brief: copy it in (keep earlier rounds' files on resume/fork).
@@ -218,11 +219,9 @@ git -C "$wt" rev-parse HEAD >"$run/base"
 phase=install
 echo "$phase" >"$run/phase"
 echo "codex-run: installing dependencies in $wt (limit $((install_s / 60)) min)" >&2
-set +e
-(cd "$wt" && timeout -k 10 "$install_s" bash -c "$install_cmd") >"$run/install.log" 2>&1
-irc=$?
-set -e
-if ((irc == 124 || irc == 137)); then finish 123 "dependency install timed out after $install_s s"; fi
+irc=0 # `|| irc=$?` keeps an expected failure out of the ERR trap
+(cd "$wt" && timeout -k 10 "$install_s" bash -c "$install_cmd") >"$run/install.log" 2>&1 || irc=$?
+if ((irc == 124 || irc == 137)); then finish 123 "dependency install timed out after $(human "$install_s")"; fi
 if ((irc != 0)); then finish 122 "dependency install failed (exit $irc); see install.log"; fi
 
 phase=setup
@@ -323,20 +322,18 @@ while kill -0 "$cpid" 2>/dev/null; do
 		warned=0
 	fi
 	if ((now - start >= timeout_s)); then
-		finish 124 "Codex run timed out after $((timeout_s / 60)) min"
+		finish 124 "Codex run timed out after $(human "$timeout_s")"
 	elif ((now - last_alive >= stall_s)); then
-		finish 125 "stalled: no Codex event, heavy-lock heartbeat or worktree change for $((stall_s / 60)) min ($stall_s s)"
+		finish 125 "stalled: no Codex event, heavy-lock heartbeat or worktree change for $(human "$stall_s")"
 	elif ((now - last_event < stall_s && now - last_progress >= 2 * progress_s)); then
-		finish 119 "busy without progress: events but no worktree change for $((2 * progress_s / 60)) min ($((2 * progress_s)) s)"
+		finish 119 "busy without progress: events but no worktree change for $(human $((2 * progress_s)))"
 	elif ((!warned && now - last_event < stall_s && now - last_progress >= progress_s)); then
 		warned=1
-		echo "$(date -Is) warning: events continue but the worktree has not changed for $((progress_s / 60)) min ($progress_s s)" >>"$run/warnings"
+		echo "$(date -Is) warning: events continue but the worktree has not changed for $(human "$progress_s")" >>"$run/warnings"
 	fi
 done
-set +e
-wait "$cpid"
-rc=$?
-set -e
+rc=0
+wait "$cpid" || rc=$?
 cpid=
 phase=summary
 echo "$phase" >"$run/phase"

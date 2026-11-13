@@ -9,7 +9,7 @@ This method comes from `temple_inventory` (`~/code/frappe_docker_wsl/development
 | All tasks share one working tree and Codex cannot commit, so parallel work is separated only by convention | One **git worktree and branch per task** (`.worktrees/NAME`, branch `task/NAME`). The orchestrator commits in the worktree after verifying, rebases on `main`, fast-forward merges and removes the worktree.                                                                    |
 | The final report is free prose                                                                             | `--output-schema scripts/agent/report.schema.json`, so the final message is JSON: `status` (`done`/`partial`/`blocked`), `summary`, `files_changed`, `checks[{command, result, detail}]`, `tests_added`, `deviations`, `assumptions`, `questions`, `docs_notes`, `screenshots`. |
 | Session id is grepped from a multi-megabyte log                                                            | `--json` event stream to `events.jsonl`; the session id comes from its `thread.started` event. Parse with `node` (there is no `jq`).                                                                                                                                            |
-| A separate watcher must be re-armed every 20 minutes                                                       | The runner has its own watchdog: exit 124 after `--timeout` minutes (default 75), 125 after `--stall` minutes without an event (default 15). Launch it with Bash `run_in_background`; the harness notifies on exit. Do not poll and do not arm a Monitor.                       |
+| A separate watcher must be re-armed every 20 minutes | The runner has its own watchdog over the whole run (see "Never silent" below). Launch it with Bash `run_in_background`; the harness notifies on exit. Never a plain `&`, never polling. |
 | Scope and test integrity are checked by eye                                                                | The runner writes `summary.txt`: report status, changed paths, any path **outside the brief's `owned` globs**, diffstat and test cases removed or skipped. `scripts/agent/verify NAME` runs the checks and compares test counts with `main`.                                    |
 | Runs live in `/tmp/codex-runs`, shared and lost on reboot                                                  | `.agent-runs/NAME/` in the repo, gitignored: `brief.md`, `events.jsonl`, `report.json`, `summary.txt`, `session`, `exit`, `shots/`.                                                                                                                                             |
 | Codex has no way to ask a question                                                                         | The brief tells it to stop with `status: "blocked"` and `questions` when a decision is missing. Answer with `--resume`.                                                                                                                                                         |
@@ -50,15 +50,43 @@ Runs do **not** use fast mode by default (owner preference, 2026-11-12). `--fast
 
 ```
 scripts/agent/codex-run NAME BRIEF [--model M] [--effort low|medium|high|xhigh]
-                        [--resume SESSION | --fork SESSION] [--timeout MIN] [--stall MIN]
-                        [--fast] [--force-model]
+                        [--resume SESSION | --fork SESSION] [--timeout T] [--stall T]
+                        [--progress T] [--install-timeout T] [--deadline T]
+                        [--fast] [--force-model]          (T = minutes, or Ns for seconds)
 ```
 
-1. Create `.worktrees/NAME` on `task/NAME` from `main` (reuse it on resume) and run `pnpm install --frozen-lockfile --prefer-offline` there.
-2. Create `.agent-runs/NAME/` (in the main checkout), copy the brief in, and assign a port block (`HT_PORT_BASE`) so dev servers and Playwright runs do not collide.
-3. Run `codex exec [resume|fork SESSION] --json -C <worktree> -m <model> -c model_reasoning_effort=… [-c service_tier="fast" with --fast] -c sandbox_mode="workspace-write" -c approval_policy="never" -c sandbox_workspace_write.network_access=true -c sandbox_workspace_write.writable_roots=[…] --output-schema scripts/agent/report.schema.json -o .agent-runs/NAME/report.json -` with the brief on stdin.
-4. Watchdog as above; write `exit` and `session`.
-5. Write and print `summary.txt`.
+1. Check the usage budget, then create `.agent-runs/NAME/` with `pid`, `phase` and `meta` at once (so `status` sees the run from its first second), copy the brief in, and arm the outer deadline.
+2. Create `.worktrees/NAME` on `task/NAME` from `main` (reuse it on resume) and install dependencies under `--install-timeout` (default 10 min).
+3. Assign a port block (`HT_PORT_BASE`) and run `codex exec [resume|fork SESSION] --json -C <worktree> -m <model> -c model_reasoning_effort=… [-c service_tier="fast" with --fast] -c sandbox_mode="workspace-write" -c approval_policy="never" -c sandbox_workspace_write.network_access=true -c sandbox_workspace_write.writable_roots=[…] --output-schema scripts/agent/report.schema.json -o .agent-runs/NAME/report.json -` with the brief on stdin, in a minimal environment.
+4. Watch it (below), then write `exit`, `exit-reason`, `session` and `summary.txt`, and print the summary.
+
+### Never silent
+
+Every path out of the runner goes through one `finish` function behind `ERR`, `INT`, `TERM`, `HUP` and `EXIT` traps, so a setup error, an install hang, a crash in the summary step or a signal still leaves `exit` (a code), `exit-reason` (one line) and `summary.txt`, and the runner exits. Only SIGKILL (a crash or a machine restart) can bypass the traps; `status` catches that case.
+
+| Exit | Meaning |
+|---|---|
+| 0 | Codex finished |
+| 1–99 | Codex itself exited with that code (the reason quotes its last stderr line) |
+| 119 | Busy without progress: Codex kept emitting events but the worktree diff did not change for 2 × `--progress` (a warning is written to `summary.txt` after 1 × `--progress`; default 30 min) |
+| 120 | Died: the runner disappeared without an exit record; written later by `status` |
+| 121 | Setup error (the reason names the phase, line and command) |
+| 122 / 123 | Dependency install failed / timed out |
+| 124 | Codex run exceeded `--timeout` (default 75 min) |
+| 125 | Stalled: no Codex event, no heavy-lock heartbeat and no worktree change for `--stall` (default 12 min) |
+| 126 | The whole runner exceeded `--deadline` (default `--timeout` + 20 min) |
+| 128 + N | Killed by signal N (129 HUP, 130 INT, 143 TERM) |
+
+**Heavy-lock waits are alive, not stalls.** `scripts/heavy` writes `$HT_RUN_DIR/heavy-wait` (and `/tmp/hourtrail-heavy.waiting.d/<pid>`) every 30 s while waiting, with the waiting command and the holder, and `$HT_RUN_DIR/heavy-run` while it holds the lock; `<lock>.holder` names the current holder. The stall timer treats a fresh heartbeat as a sign of life and the progress timer pauses while it is fresh, so `--stall` can stay short: a run is only killed when nothing at all happens.
+
+**Verify and land never hang.** `scripts/agent/verify` gives each step a limit (install 10, format 5, lint 10, types 10, unit tests 15, baseline 20, build 20 and E2E 40 min, including any heavy-lock wait; override with `HT_VERIFY_<STEP>_S`) and the whole run 75 min; `scripts/agent/land` limits rebase, install, check, E2E and push, and the whole run to 60 min (`HT_LAND_<STEP>_S`, `HT_LAND_DEADLINE_S`). A timeout prints `TIMEOUT: <step>` and exits non-zero.
+
+### Status, liveness and recovery
+
+- **No untracked launches.** Every runner, verify, land or wait goes through Bash `run_in_background`, never a plain `&` (an `&` launch once left a land and a Codex run that the harness could not report on).
+- **`scripts/agent/status` first, every time you wake up**, including from cache-warm and liveness timers. It lists every run as running (live pid), finished (exit code and reason) or died, with age, last event, model, phase and whether it is waiting on or holding the heavy lock, flags stalled or overdue runs, and exits 3 when anything needs attention. A died run (pid gone, no `exit`) gets `exit` 120 and an `exit-reason`, and is appended to `.agent-runs/resume-queue` as `--resume SESSION` (or `relaunch` when it never got a session): resume or relaunch it, then delete its queue line.
+- **Liveness timer.** Whenever runs are in flight, keep `scripts/agent/watch-runs` running in the background (`run_in_background`). It checks `status` every minute and exits, waking you, as soon as a run dies, stalls or overruns (exit 3), when no runs remain (exit 0), or after 30 minutes (exit 0: re-arm it). Re-arm it until no runs remain.
+- **Self-test.** `scripts/agent/selftest` demonstrates each failure mode with a fake codex (`scripts/agent/lib/fake-codex`, selected through `HT_CODEX_BIN`) in about two minutes, on its own heavy lock. Run it after any change to the runner, `heavy`, `status` or `watch-runs`.
 
 Smoke-run findings (task 0.2) are recorded at the end of this document.
 
@@ -83,7 +111,8 @@ Size: one coherent change reviewable in one sitting (roughly up to 600 changed l
 ## Loop for each task
 
 1. Write the brief. For tasks that share an interface, land the types in `packages/core` first, then run consumers in parallel with disjoint `owned` globs. Only one running task may add dependencies (lockfile).
-2. Run `scripts/agent/codex-usage`, choose the model, launch the runner with `run_in_background`. Carry on with other work.
+0. On waking (a notification, a timer, a restart): run `scripts/agent/status` and deal with died, stalled or queued runs before anything else.
+2. Run `scripts/agent/codex-usage`, choose the model, launch the runner with `run_in_background` (never `&`), and make sure `scripts/agent/watch-runs` is armed. Carry on with other work.
 3. When notified, read `summary.txt` and `report.json`. Read `events.jsonl` only to diagnose a failure.
 4. Verify in the worktree: `scripts/agent/verify NAME` (format, lint, types, unit tests, build, E2E when the task touches UI or sync, all under `scripts/heavy`); read the whole diff against the brief and SPEC; compare test edits with intent (Codex has weakened assertions before); open every screenshot and check real data, Chinese text, both themes and 390 px width. A blank or loading screenshot is a failure.
 5. Treat any report line like "a test failed once and did not reproduce" as a bug report: rerun that suite repeatedly until it fails and fix the cause (a flaky property test found a real `z.json()` data-loss bug).
