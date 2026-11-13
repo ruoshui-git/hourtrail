@@ -59,7 +59,8 @@ export async function acquireCloud(): Promise<void> {
 			} catch {
 				// Removed by its owner meanwhile.
 			}
-			if (Date.now() > deadline) throw new Error('Timed out waiting for the cloud E2E lock.');
+			if (Date.now() > deadline)
+				throw new Error('Timed out waiting for the cloud E2E lock.', { cause: error });
 			await new Promise((done) => setTimeout(done, 500));
 		}
 	}
