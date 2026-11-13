@@ -13,6 +13,10 @@ import { requireDevice } from '../auth';
 import type { AppEnv } from '../env';
 import { ApiError } from '../errors';
 import { parseJson, parseQuery } from '../validate';
+import { warmPushPath } from '../warmup';
+
+// Pay zod's first-use cost at isolate startup, not inside the first push (see warmup.ts).
+warmPushPath();
 
 export const sync = new Hono<AppEnv>();
 type StoredRecord = { entity: Entity; data: string };
