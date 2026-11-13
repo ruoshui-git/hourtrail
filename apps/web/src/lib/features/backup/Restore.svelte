@@ -54,10 +54,15 @@
 						const count = file!.records[entity].filter(
 							(record) => record.deleted_at === null,
 						).length;
-						return `${count.toLocaleString('en-US')} ${labels[entity][count === 1 ? 0 : 1]}`;
+						return count > 0
+							? `${count.toLocaleString('en-US')} ${labels[entity][count === 1 ? 0 : 1]}`
+							: null;
 					})
+					.filter((count): count is string => count !== null)
 					.join(', ') +
-					`, ${file.local_fixes.length.toLocaleString('en-US')} local raw ${file.local_fixes.length === 1 ? 'fix' : 'fixes'}`
+					(file.local_fixes.length > 0
+						? `, ${file.local_fixes.length.toLocaleString('en-US')} local raw ${file.local_fixes.length === 1 ? 'fix' : 'fixes'}`
+						: '')
 			: '',
 	);
 	function date(at: number, detailed = false) {

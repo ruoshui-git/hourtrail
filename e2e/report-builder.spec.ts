@@ -29,7 +29,7 @@ const INVENTORY_NOTE = '权限开发 and import testing.';
 function hm(minutes: number): string {
 	const hours = Math.floor(minutes / 60);
 	const rest = minutes % 60;
-	return hours > 0 ? `${hours}h ${rest}m` : `${rest}m`;
+	return hours > 0 ? `${hours}h ${String(rest).padStart(2, '0')}m` : `${rest}m`;
 }
 
 function typeId(name: string): string {
@@ -209,8 +209,8 @@ test('Scenario J: This month aggregates Work hours, lists other types apart, and
 		const group = page.locator(`.print-sheet section[data-group="${session.work_item_id}"]`);
 		await expect(group).toContainText(session.note);
 	}
-	await expect(rowWithNote(page, WORK_NOTE)).toContainText('Building Maintenance');
-	await expect(rowWithNote(page, INVENTORY_NOTE)).toContainText('库存管理系统开发');
+	await expect(rowWithNote(page, WORK_NOTE)).not.toContainText('Building Maintenance');
+	await expect(rowWithNote(page, INVENTORY_NOTE)).not.toContainText('库存管理系统开发');
 });
 
 test('Excluding a session removes it from totals and the CSV, and it stays visible as Excluded', async ({
@@ -266,7 +266,7 @@ test('Custom headings show in the preview and as the CSV header row', async ({ p
 	await page.locator('.headings').getByLabel('Work item', { exact: true }).fill('工作项');
 	await page.locator('.headings').getByLabel('Date', { exact: true }).fill('日期');
 	await showPreview(page);
-	await expect(page.locator('.print-sheet thead th', { hasText: '工作项' }).first()).toBeVisible();
+	await expect(page.locator('.print-sheet thead th', { hasText: '工作项' })).toHaveCount(0);
 	await expect(page.locator('.print-sheet thead th', { hasText: '日期' }).first()).toBeVisible();
 
 	const [download] = await Promise.all([page.waitForEvent('download'), exportAs(page, 'CSV')]);

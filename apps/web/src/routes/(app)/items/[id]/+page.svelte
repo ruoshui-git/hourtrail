@@ -4,7 +4,7 @@
 	import { resolve } from '$app/paths';
 	import { onDestroy } from 'svelte';
 	import { ChevronLeft } from '@lucide/svelte';
-	import { sessionMinutes } from '@hourtrail/core';
+	import { readSetting, sessionMinutes } from '@hourtrail/core';
 	import { db, repo } from '$lib/db/app';
 	import { live } from '$lib/live.svelte';
 	import {
@@ -25,20 +25,22 @@
 	const id = $derived(page.params.id ?? '');
 	const data = live(
 		async () => {
-			const [item, types, projects, sessions] = await Promise.all([
+			const [item, types, projects, sessions, durationSetting] = await Promise.all([
 				db.work_item.get(id),
 				db.activity_type.toArray(),
 				db.project.toArray(),
 				db.session.where('work_item_id').equals(id).toArray(),
+				db.setting.get('duration_format'),
 			]);
 			return {
 				item,
 				types: types.filter((x) => !x.deleted_at && !x.archived_at),
 				projects: projects.filter((x) => !x.deleted_at && !x.archived_at),
 				sessions: sessions.filter((x) => !x.deleted_at).sort((a, b) => b.start_at - a.start_at),
+				durationFormat: readSetting('duration_format', durationSetting?.value) ?? 'hm',
 			};
 		},
-		{ item: undefined, types: [], projects: [], sessions: [] },
+		{ item: undefined, types: [], projects: [], sessions: [], durationFormat: 'hm' },
 	);
 	let name = $state('');
 	let description = $state('');
@@ -141,7 +143,7 @@
 	<section>
 		<h2>Total time</h2>
 		<p>
-			{formatMinutes(total)} across {data.current.sessions.length}
+			{formatMinutes(total, data.current.durationFormat)} across {data.current.sessions.length}
 			{data.current.sessions.length === 1 ? 'session' : 'sessions'}
 		</p>
 	</section>
@@ -156,9 +158,13 @@
 						: new Intl.DateTimeFormat(undefined, { timeStyle: 'short' }).format(
 								session.end_at,
 							)}</span
-				><span>{formatMinutes(sessionMinutes(session.start_at, session.end_at ?? now))}</span
+				><span
+					>{formatMinutes(
+						sessionMinutes(session.start_at, session.end_at ?? now),
+						data.current.durationFormat,
+					)}</span
 				>{#if session.note}<p>{session.note.split('\n')[0]}</p>{/if}
-			</article>{:else}<p>No sessions yet.</p>{/each}
+			</article>{:else}<p>No sessions yet. Add a session to this work item.</p>{/each}
 	</section>
 	<footer>
 		<Button variant="secondary" onclick={archive}

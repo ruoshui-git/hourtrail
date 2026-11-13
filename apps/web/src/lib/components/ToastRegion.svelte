@@ -18,7 +18,7 @@
 	}
 </script>
 
-<div class="region" aria-live="polite">
+<div class="region" aria-live="polite" aria-atomic="false">
 	{#each toasts.items as toast (toast.id)}
 		<div
 			class="toast"

@@ -9,7 +9,7 @@ type WorkItem = RecordOf<'work_item'>;
 type ActivityType = RecordOf<'activity_type'>;
 type Place = RecordOf<'place'>;
 
-export type HistorySettings = { long_gap_min?: number };
+export type HistorySettings = { long_gap_min?: number; duration_format?: 'hm' | 'decimal' };
 export type DayModel = {
 	dayStart: number;
 	dayEnd: number;
@@ -21,7 +21,7 @@ export type DayModel = {
 
 const tickFormatter = new Intl.DateTimeFormat(undefined, { hour: 'numeric' });
 // One duration style across the app (DESIGN_SYSTEM Voice): "2h 14m", "45m".
-const duration = formatMinutes;
+const duration = (minutes: number, format: 'hm' | 'decimal') => formatMinutes(minutes, format);
 
 export function buildDay(
 	day: Day,
@@ -62,7 +62,7 @@ export function buildDay(
 				start: gapStart,
 				end: gapEnd,
 				rangeLabel: `${formatClock(gapStart)} to ${formatClock(gapEnd)}`,
-				durationLabel: duration(gapMinutes),
+				durationLabel: duration(gapMinutes, settings.duration_format ?? 'hm'),
 			});
 		}
 		const item = itemById.get(session.work_item_id ?? '');
@@ -77,7 +77,7 @@ export function buildDay(
 			typeColor: type?.color ?? 'lake',
 			placeName: place?.name,
 			note: session.note || undefined,
-			durationLabel: duration(slice.minutes),
+			durationLabel: duration(slice.minutes, settings.duration_format ?? 'hm'),
 			pending: false,
 			continuesFromPreviousDay: !slice.first,
 			continuesNextDay: !slice.last,

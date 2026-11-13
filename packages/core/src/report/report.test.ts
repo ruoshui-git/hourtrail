@@ -308,6 +308,8 @@ describe('labels, headings and formatting', () => {
 
 	it('formats hours in both formats and rejects fractional or negative minutes', () => {
 		expect(formatHours(134, 'hm')).toBe('2h 14m');
+		expect(formatHours(125, 'hm')).toBe('2h 05m');
+		expect(formatHours(180, 'hm')).toBe('3h 00m');
 		expect(formatHours(14, 'hm')).toBe('14m');
 		expect(formatHours(0, 'hm')).toBe('0m');
 		expect(formatHours(134, 'decimal')).toBe('2.23');

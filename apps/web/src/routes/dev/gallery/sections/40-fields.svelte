@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Field, TextInput, TextArea, Select, DateTimeInput } from '$lib/components';
+	import { Field, TextInput, TextArea, Select, DateInput, DateTimeInput } from '$lib/components';
 	const note =
 		'修复洗手台\nQuarterly volunteer coordination and event preparation\nChecked the fittings at 第1寺院 and recorded the work.';
 	const options = [
@@ -108,6 +108,9 @@
 					{...props}
 					value="2026-11-12T03:00"
 				/>{/snippet}</Field
+		>
+		<Field label="Date"
+			>{#snippet children(props)}<DateInput {...props} value="2026-11-12" />{/snippet}</Field
 		>
 	</div>
 </section>

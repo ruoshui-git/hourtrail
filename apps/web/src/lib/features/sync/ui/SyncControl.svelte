@@ -12,6 +12,19 @@
 			: `Last backed up: ${new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(sync.lastSyncedAt)}`,
 	);
 	const rejected = $derived([...sync.rejected].sort((a, b) => b.at - a.at).slice(0, 20));
+	const announcement = $derived(
+		sync.status === 'local'
+			? 'On this device only'
+			: sync.status === 'synced'
+				? 'Backed up'
+				: sync.status === 'pending'
+					? `${sync.pendingCount} changes waiting`
+					: sync.status === 'offline'
+						? "You're offline. Changes are saved on this device."
+						: sync.status === 'error'
+							? (sync.lastError ?? 'Sync problem')
+							: 'Syncing',
+	);
 
 	function time(at: number) {
 		return new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(at);
@@ -43,6 +56,7 @@
 </script>
 
 <SyncBadge state={sync.status} pendingCount={sync.pendingCount} onclick={() => (open = true)} />
+<span class="ht-visually-hidden" aria-live="polite" aria-atomic="true">{announcement}</span>
 <Sheet bind:open title="Sync details" onclose={() => (open = false)}>
 	<p>
 		{sync.status === 'local'
@@ -57,7 +71,7 @@
 	</p>
 	{#if sync.status !== 'local'}<p>{lastBackup}</p>{/if}
 	{#if sync.status === 'error'}
-		<p>{sync.lastError ?? 'Sync could not be completed.'}</p>
+		<p role="alert">{sync.lastError ?? 'Sync could not be completed.'}</p>
 		<Button variant="secondary" onclick={() => void syncNow()}>Try again</Button>
 	{/if}
 	{#if sync.status === 'local'}

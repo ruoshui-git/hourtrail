@@ -10,7 +10,12 @@
 		secondary?: string;
 	};
 
-	let { title, items, max }: { title: string; items: Item[]; max?: number } = $props();
+	let {
+		title,
+		items,
+		max,
+		format = 'hm',
+	}: { title: string; items: Item[]; max?: number; format?: 'hm' | 'decimal' } = $props();
 
 	const scale = $derived(
 		max !== undefined && max > 0 ? max : Math.max(0, ...items.map((item) => item.minutes)),
@@ -28,7 +33,7 @@
 						<span>{item.label}</span>
 						{#if item.secondary}<span class="secondary">{item.secondary}</span>{/if}
 					</span>
-					<span class="value">{formatMinutes(item.minutes)}</span>
+					<span class="value">{formatMinutes(item.minutes, format)}</span>
 				</div>
 				<div class="track" aria-hidden="true">
 					<span

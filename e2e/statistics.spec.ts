@@ -14,11 +14,11 @@ test.use({ actionTimeout: 15_000 });
 const PINNED = new Date('2026-11-12T12:00:00-05:00');
 const ZONE = 'America/New_York';
 
-/** Minutes as core's formatHours prints them: "3h 13m", "1h 0m", "45m". */
+/** Minutes as core's formatHours prints them: "3h 13m", "1h 00m", "45m". */
 function hm(minutes: number): string {
 	const hours = Math.floor(minutes / 60);
 	const rest = minutes % 60;
-	return hours > 0 ? `${hours}h ${rest}m` : `${rest}m`;
+	return hours > 0 ? `${hours}h ${String(rest).padStart(2, '0')}m` : `${rest}m`;
 }
 
 /** Whole minutes of every live session of one type, summed from the stored records. */

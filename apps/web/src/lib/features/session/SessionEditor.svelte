@@ -34,6 +34,11 @@
 	const places = live(() => db.place.toArray(), []);
 	const fixes = live(() => db.local_fix.toArray(), []);
 	const setting = live(() => db.setting.get('reporting_tz'), undefined);
+	const durationSetting = live(() => db.setting.get('duration_format'), undefined);
+	const durationFormat = $derived(
+		readSetting('duration_format', durationSetting.current?.value) ?? 'hm',
+	);
+	const durationLabel = (minutes: number) => formatMinutes(minutes, durationFormat);
 	const zone = $derived(
 		readSetting('reporting_tz', setting.current?.value) ??
 			Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -134,7 +139,7 @@
 	);
 	const mergeMessage = $derived(
 		mergeResult?.ok && session && adjacentSession
-			? `The merged session will run ${formatClock(Math.min(session.start_at, adjacentSession.start_at), zone)}–${formatClock(Math.max(session.end_at!, adjacentSession.end_at!), zone)}${mergeResult.gapMs > 0 ? `, including ${formatMinutes(Math.ceil(mergeResult.gapMs / 60_000))} not recorded` : ''}.`
+			? `The merged session will run ${formatClock(Math.min(session.start_at, adjacentSession.start_at), zone)}–${formatClock(Math.max(session.end_at!, adjacentSession.end_at!), zone)}${mergeResult.gapMs > 0 ? `, including ${durationLabel(Math.ceil(mergeResult.gapMs / 60_000))} not recorded` : ''}.`
 			: '',
 	);
 	function formatClock(timestamp: number, timeZone: string) {
@@ -379,7 +384,7 @@
 				/>{/snippet}
 		</Field>
 		<p class="duration">
-			Duration: {duration === null ? '—' : formatMinutes(duration)}
+			Duration: {duration === null ? '—' : durationLabel(duration)}
 		</p>
 		<Field label="Note" id="session-note">
 			{#snippet children(props)}<div>
@@ -467,12 +472,12 @@
 		</Field>
 		{#if session && session.end_at !== null && splitAt.ok}
 			<p class="duration">
-				{formatClock(session.start_at, zone)}–{formatClock(splitAt.instant, zone)}, {formatMinutes(
+				{formatClock(session.start_at, zone)}–{formatClock(splitAt.instant, zone)}, {durationLabel(
 					sessionMinutes(session.start_at, splitAt.instant),
 				)}
 			</p>
 			<p class="duration">
-				{formatClock(splitAt.instant, zone)}–{formatClock(session.end_at, zone)}, {formatMinutes(
+				{formatClock(splitAt.instant, zone)}–{formatClock(session.end_at, zone)}, {durationLabel(
 					sessionMinutes(splitAt.instant, session.end_at),
 				)}
 			</p>

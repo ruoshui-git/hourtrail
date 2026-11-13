@@ -31,5 +31,5 @@ export function formatHours(minutes: number, format: 'hm' | 'decimal'): string {
 	if (format === 'decimal') return (minutes / 60).toFixed(2);
 	const hours = Math.floor(minutes / 60);
 	const rest = minutes % 60;
-	return hours > 0 ? `${hours}h ${rest}m` : `${rest}m`;
+	return hours > 0 ? `${hours}h ${String(rest).padStart(2, '0')}m` : `${rest}m`;
 }

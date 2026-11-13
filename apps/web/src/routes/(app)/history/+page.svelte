@@ -46,6 +46,7 @@
 				marks,
 				longSession,
 				notePrompt,
+				durationSetting,
 			] = await Promise.all([
 				db.session.toArray(),
 				db.work_item.toArray(),
@@ -57,6 +58,7 @@
 				db.review_mark.toArray(),
 				db.setting.get('long_session_min'),
 				db.setting.get('note_prompt'),
+				db.setting.get('duration_format'),
 			]);
 			const gap = await db.setting.get('long_gap_min');
 			return {
@@ -71,6 +73,7 @@
 				marks,
 				longSession: readSetting('long_session_min', longSession?.value) ?? 600,
 				notePrompt: readSetting('note_prompt', notePrompt?.value) ?? 'work',
+				durationFormat: readSetting('duration_format', durationSetting?.value) ?? 'hm',
 			};
 		},
 		{
@@ -85,6 +88,7 @@
 			marks: [],
 			longSession: 600,
 			notePrompt: 'work' as const,
+			durationFormat: 'hm' as const,
 		},
 	);
 	const projects = live(() => db.project.toArray(), []);
@@ -192,7 +196,10 @@
 			data.current.items.filter((i) => i.deleted_at === null),
 			data.current.types.filter((t) => t.deleted_at === null),
 			data.current.places.filter((p) => p.deleted_at === null),
-			{ long_gap_min: typeof data.current.gap === 'number' ? data.current.gap : 60 },
+			{
+				long_gap_min: typeof data.current.gap === 'number' ? data.current.gap : 60,
+				duration_format: data.current.durationFormat,
+			},
 			now,
 		),
 	);
@@ -234,7 +241,7 @@
 			}),
 		),
 	);
-	const shortDuration = formatMinutes;
+	const shortDuration = (minutes: number) => formatMinutes(minutes, data.current.durationFormat);
 	async function selectDay(day: string) {
 		await goto(resolve(day === today ? '/history' : `/history?day=${day}`));
 	}
@@ -314,10 +321,13 @@
 				{searchResult.sessions.length}
 				{searchResult.sessions.length === 1 ? 'session' : 'sessions'}, {formatMinutes(
 					searchResult.minutes,
+					data.current.durationFormat,
 				)}
 				<Button variant="quiet" size="sm" onclick={clearFilters}>Clear</Button>
 			</div>
-			{#if desktop}<div class="results-table">
+			{#if searchResult.sessions.length === 0}
+				<p class="empty-results">No sessions found. Change your search or clear the filters.</p>
+			{:else if desktop}<div class="results-table">
 					<table>
 						<thead
 							><tr
@@ -359,6 +369,7 @@
 									><td
 										>{formatMinutes(
 											Math.round(((session.end_at ?? now) - session.start_at) / 60000),
+											data.current.durationFormat,
 										)}</td
 									><td><MatchText text={session.note.split('\n')[0] ?? ''} {query} /></td></tr
 								>{/each}</tbody
@@ -368,12 +379,14 @@
 			{:else}<SearchRows
 					sessions={searchResult.sessions}
 					items={data.current.items}
+					format={data.current.durationFormat}
 					types={data.current.types}
 					places={data.current.places}
 					{query}
 					{now}
 					onselect={selectSession}
-				/>{/if}
+				/>
+			{/if}
 		{:else}
 			<header>
 				<h1>{dayTitle}</h1>
@@ -548,6 +561,11 @@
 		gap: var(--ht-space-2);
 		color: var(--ht-ink-2);
 		font: var(--ht-type-label);
+	}
+
+	.empty-results {
+		padding-block: var(--ht-space-5);
+		color: var(--ht-ink-2);
 	}
 
 	.results-table {

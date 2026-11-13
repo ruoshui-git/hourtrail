@@ -143,7 +143,13 @@
 </div>
 {#if snapshot.items.length === 0}
 	<EmptyState
-		message="No work items yet. Add work item"
+		message="No work items yet. Type a name on Home to start one."
+		actionLabel="Add work item"
+		onaction={() => (adding = true)}
+	/>
+{:else if visible.length === 0}
+	<EmptyState
+		message="No work items match. Change your search or add a work item."
 		actionLabel="Add work item"
 		onaction={() => (adding = true)}
 	/>
@@ -249,7 +255,9 @@
 								role="img"
 								aria-label="Not backed up yet"
 							></span>{/if}
-					</div>{/if}{/each}{#if archived.length === 0}<p>No archived work items.</p>{/if}{/if}
+					</div>{/if}{/each}{#if archived.length === 0}<p>
+					No archived work items. Archive a work item to see it here.
+				</p>{/if}{/if}
 	</section>
 {/if}
 <Sheet bind:open={adding} title="Add work item" onclose={() => (adding = false)}

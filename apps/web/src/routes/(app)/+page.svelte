@@ -39,6 +39,7 @@
 		todayTotals,
 	} from '$lib/features/home/domain';
 	import { formatClock } from '$lib/components/trail';
+	import { formatMinutes } from '$lib/format';
 	import { captureFor } from '$lib/features/location/capture';
 	import { promptChoice } from '$lib/features/location/domain';
 	import { clockOffsetMinutes, observeClock, setClockOffset } from '$lib/features/clock/clock';
@@ -65,6 +66,7 @@
 				gapSetting,
 				longSetting,
 				noteSetting,
+				durationSetting,
 				conflicts,
 				marks,
 				dayReviews,
@@ -79,6 +81,7 @@
 				db.setting.get('long_gap_min'),
 				db.setting.get('long_session_min'),
 				db.setting.get('note_prompt'),
+				db.setting.get('duration_format'),
 				db.conflict.toArray(),
 				db.review_mark.toArray(),
 				db.day_review.toArray(),
@@ -99,6 +102,7 @@
 				longGap: readSetting('long_gap_min', gapSetting?.value) ?? 60,
 				longSession: readSetting('long_session_min', longSetting?.value) ?? 600,
 				notePrompt: readSetting('note_prompt', noteSetting?.value) ?? 'work',
+				durationFormat: readSetting('duration_format', durationSetting?.value) ?? 'hm',
 				outbox,
 				clockOffsetMs: typeof clockRow?.value === 'number' ? clockRow.value : 0,
 			};
@@ -118,6 +122,7 @@
 			longGap: 60,
 			longSession: 600,
 			notePrompt: 'work' as const,
+			durationFormat: 'hm' as const,
 		},
 	);
 	const running = live(() => repo.running(), [] as Session[]);
@@ -127,6 +132,7 @@
 	);
 	let now = $state(Date.now());
 	let busy = $state(false);
+	let announcement = $state('');
 	let search = $state('');
 	let sheet = $state<'items' | 'types' | null>(null);
 	let sheetQuery = $state('');
@@ -404,9 +410,7 @@
 	}
 
 	function duration(minutes: number) {
-		const hours = Math.floor(minutes / 60);
-		const rest = minutes % 60;
-		return `${hours ? `${hours}h ` : ''}${String(rest).padStart(hours ? 2 : 1, '0')}m`;
+		return formatMinutes(minutes, today.current.durationFormat);
 	}
 	async function announceFirstSession() {
 		if (persistenceAsked) return;
@@ -435,6 +439,8 @@
 				const result = await repo.start({ workItemId: id });
 				if (!result.alreadyRunning) void captureFor(result.session.id, 'start');
 				if (!result.alreadyRunning) await announceFirstSession();
+				if (!result.alreadyRunning)
+					announcement = `Started ${id ? (allItems.find((item) => item.id === id)?.name ?? 'Untitled session') : 'Untitled session'}`;
 			}
 			search = '';
 			sheet = null;
@@ -469,6 +475,7 @@
 				if (!result.alreadyRunning) void captureFor(result.session.id, 'start');
 				await announceFirstSession();
 				showToast({ message: `${normalized} started.`, undo: () => repo.undo(result.undo) });
+				announcement = `Started ${normalized}`;
 			}
 			search = '';
 			sheet = null;
@@ -486,6 +493,7 @@
 				void captureFor(result.session.id, 'start');
 				await announceFirstSession();
 				showToast({ message: `${normalized} started.`, undo: () => repo.undo(result.undo) });
+				announcement = `Started ${normalized}`;
 				search = '';
 				sheetQuery = '';
 				sheet = null;
@@ -589,6 +597,7 @@
 </script>
 
 <svelte:head><title>Today · Hourtrail</title></svelte:head>
+<p class="ht-visually-hidden" aria-live="polite" aria-atomic="true">{announcement}</p>
 <header class="page-header">
 	<div class="date-line">
 		<h1>

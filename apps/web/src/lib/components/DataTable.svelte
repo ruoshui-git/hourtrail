@@ -89,7 +89,11 @@
 	th:first-child,
 	td:first-child {
 		padding-inline-start: 0;
-		white-space: nowrap;
+		min-width: calc(var(--ht-space-8) * 2);
+	}
+
+	th:first-child {
+		white-space: normal;
 	}
 
 	th:last-child,

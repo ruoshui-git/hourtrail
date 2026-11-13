@@ -8,6 +8,7 @@ export { default as TextInput } from './TextInput.svelte';
 export { default as TextArea } from './TextArea.svelte';
 export { default as Select } from './Select.svelte';
 export { default as DateTimeInput } from './DateTimeInput.svelte';
+export { default as DateInput } from './DateInput.svelte';
 export { default as Switch } from './Switch.svelte';
 export { default as Stepper } from './Stepper.svelte';
 export { default as SegmentedControl } from './SegmentedControl.svelte';

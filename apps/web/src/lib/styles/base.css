@@ -75,7 +75,15 @@ button {
 	cursor: pointer;
 }
 
-:focus-visible {
+body :focus-visible {
+	outline: var(--ht-focus-width) solid var(--ht-ink);
+	outline-offset: var(--ht-focus-offset);
+}
+
+/* Native date and time controls can take keyboard focus without matching :focus-visible. */
+body input:focus,
+body select:focus,
+body textarea:focus {
 	outline: var(--ht-focus-width) solid var(--ht-ink);
 	outline-offset: var(--ht-focus-offset);
 }

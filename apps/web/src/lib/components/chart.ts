@@ -1,4 +1,5 @@
 import type { BlazeKey } from '@hourtrail/core';
+import { formatHours } from '@hourtrail/core';
 
 /** One stacked series (an activity type). Stack order is the order of the series array, bottom to top. */
 export type ChartSeries = { key: string; label: string; color: BlazeKey };
@@ -20,12 +21,9 @@ export function niceTicks(maxValue: number, targetCount = 4): number[] {
 }
 
 /** Durations in minutes as `5h 12m`, `45m`, `0m`. Hours are unpadded; minutes are padded once hours show. */
-export function formatMinutes(minutes: number): string {
+export function formatMinutes(minutes: number, format: 'hm' | 'decimal' = 'hm'): string {
 	const total = Math.max(0, Math.round(toMinutes(minutes)));
-	const hours = Math.floor(total / 60);
-	const rest = total % 60;
-	if (hours === 0) return `${rest}m`;
-	return `${hours}h ${String(rest).padStart(2, '0')}m`;
+	return formatHours(total, format);
 }
 
 /** Minutes as a non-negative finite number; anything else counts as zero. */

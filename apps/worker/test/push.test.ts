@@ -274,7 +274,7 @@ describe('reminder cron', () => {
 			web_push: 8030,
 			notification: {
 				title: 'Still working?',
-				body: '库存管理系统开发 第1寺院 修复洗手台 has been running for 4h 1m.',
+				body: '库存管理系统开发 第1寺院 修复洗手台 has been running for 4h 01m.',
 				navigate: `/?check=${sessions[1]!.id}`,
 			},
 		});
@@ -330,7 +330,7 @@ describe('reminder cron', () => {
 		await cron();
 		expect(captured).toHaveLength(1);
 		expect((await payload(captured[0]!)).notification.body).toBe(
-			`${'库'.repeat(80)}… has been running for 4h 0m.`,
+			`${'库'.repeat(80)}… has been running for 4h 00m.`,
 		);
 		expect(await state()).toEqual([
 			{ session_id: sessions[0]!.id, last_sent_at: now, sent_count: 1 },

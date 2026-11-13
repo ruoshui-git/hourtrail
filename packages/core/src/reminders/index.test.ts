@@ -28,7 +28,7 @@ describe('dueReminders', () => {
 				session_id: 'session',
 				notification: {
 					title: 'Still working?',
-					body: '库存管理系统开发 has been running for 4h 0m.',
+					body: '库存管理系统开发 has been running for 4h 00m.',
 					navigate: '/?check=session',
 				},
 			},
@@ -64,7 +64,7 @@ describe('dueReminders', () => {
 			const data = input();
 			data.sessions = [{ ...data.sessions[0]!, work_item_name: name }];
 			expect(dueReminders(data, now)[0]!.notification.body).toBe(
-				`${name || 'Untitled session'} has been running for 4h 0m.`,
+				`${name || 'Untitled session'} has been running for 4h 00m.`,
 			);
 		},
 	);
@@ -98,7 +98,7 @@ describe('dueReminders', () => {
 		const data = input();
 		data.sessions = [{ ...data.sessions[0]!, work_item_name: name }];
 		expect(dueReminders(data, now)[0]!.notification.body).toBe(
-			`${expected} has been running for 4h 0m.`,
+			`${expected} has been running for 4h 00m.`,
 		);
 	});
 	it('keeps the serialized push payload for a 2,000-character Chinese name well below the encryption limit', () => {
@@ -111,7 +111,7 @@ describe('dueReminders', () => {
 			},
 		];
 		const reminder = dueReminders(data, now)[0]!;
-		expect(reminder.notification.body).toBe(`${'库'.repeat(80)}… has been running for 4h 0m.`);
+		expect(reminder.notification.body).toBe(`${'库'.repeat(80)}… has been running for 4h 00m.`);
 		const payload = JSON.stringify({ web_push: 8030, notification: reminder.notification });
 		expect(Buffer.byteLength(payload, 'utf8')).toBeLessThan(512);
 	});

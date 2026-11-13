@@ -10,6 +10,7 @@
 		places,
 		query,
 		now,
+		format = 'hm',
 		onselect,
 	}: {
 		sessions: RecordOf<'session'>[];
@@ -18,6 +19,7 @@
 		places: RecordOf<'place'>[];
 		query: string;
 		now: number;
+		format?: 'hm' | 'decimal';
 		onselect: (id: string) => void;
 	} = $props();
 </script>
@@ -50,7 +52,10 @@
 						>{/if}
 				</span>
 				<span class="duration"
-					>{formatMinutes(Math.round(((session.end_at ?? now) - session.start_at) / 60_000))}</span
+					>{formatMinutes(
+						Math.round(((session.end_at ?? now) - session.start_at) / 60_000),
+						format,
+					)}</span
 				>
 			</button>
 		</li>

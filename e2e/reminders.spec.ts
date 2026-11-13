@@ -222,31 +222,46 @@ test('reminder screenshots for settings and the open Stop at sheet', async ({
 				});
 				await context.grantPermissions(['notifications']);
 				const page = await context.newPage();
+				await page.emulateMedia({ colorScheme: theme });
 				await page.clock.install({ time: BASE });
-				await page.goto('/settings/reminders');
-				await page.evaluate(
-					(theme) => document.documentElement.setAttribute('data-theme', theme),
-					theme,
-				);
+				await page.goto('/settings/appearance');
+				await page.getByRole('radio', { name: theme === 'dark' ? 'Dark' : 'Light' }).click();
+				await expect
+					.poll(
+						async () => (await table<Row>(page, 'local')).find((row) => row.key === 'theme')?.value,
+					)
+					.toBe(theme);
+				await page.getByRole('link', { name: 'Settings', exact: true }).click();
+				await page.getByRole('link', { name: 'Reminders', exact: true }).click();
+				await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+				await expect
+					.poll(() =>
+						page.evaluate(() =>
+							getComputedStyle(document.documentElement).getPropertyValue('--ht-paper').trim(),
+						),
+					)
+					.toBe(theme === 'dark' ? '#111614' : '#f1f4f0');
 				await page.screenshot({
 					path: join(directory, `reminders-signed-out-${viewport.width}-${theme}.png`),
 					fullPage: true,
 				});
-				await page.goto('/settings/cloud');
+				await page.getByRole('link', { name: 'Settings', exact: true }).click();
+				await page.getByRole('link', { name: 'Cloud and devices' }).click();
 				await page.getByLabel('Account key').fill(TEST_ACCOUNT_KEY);
 				await page.getByLabel('Device name').fill(`Reminder shots ${viewport.width} ${theme}`);
 				await page.getByRole('button', { name: 'Sign in' }).click();
 				await expect(page.getByText(/^Signed in as/)).toBeVisible();
-				await page.goto('/settings/reminders');
-				await page.evaluate(
-					(theme) => document.documentElement.setAttribute('data-theme', theme),
-					theme,
-				);
+				await page.getByRole('link', { name: 'Settings', exact: true }).click();
+				await page.getByRole('link', { name: 'Reminders', exact: true }).click();
+				await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
 				await page.screenshot({
 					path: join(directory, `reminders-off-${viewport.width}-${theme}.png`),
 					fullPage: true,
 				});
-				await page.getByRole('switch', { name: 'Remind me about a session left running' }).click();
+				const reminder = page.getByRole('switch', {
+					name: 'Remind me about a session left running',
+				});
+				if ((await reminder.getAttribute('aria-checked')) !== 'true') await reminder.click();
 				await expect
 					.poll(
 						async () =>
@@ -268,6 +283,7 @@ test('reminder screenshots for settings and the open Stop at sheet', async ({
 					db.close();
 				});
 				await page.reload();
+				await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
 				await page.screenshot({
 					path: join(directory, `reminders-on-${viewport.width}-${theme}.png`),
 					fullPage: true,

@@ -28,6 +28,7 @@
 	const format = $derived(config.hours_format);
 	const hours = (minutes: number) => formatHours(minutes, format);
 	const picks = $derived(config.show_sessions);
+	const showWorkItem = $derived(config.group_by !== 'work_item');
 </script>
 
 <article class="print-sheet" aria-label="Report preview">
@@ -71,11 +72,11 @@
 					<thead>
 						<tr>
 							{#if picks}<th class="pick"><span class="sr-only">Included</span></th>{/if}
-							<th>{headingLabel('date', config)}</th>
+							<th class="date">{headingLabel('date', config)}</th>
 							<th>{headingLabel('start', config)}</th>
 							<th>{headingLabel('end', config)}</th>
 							<th class="num">{headingLabel('hours', config)}</th>
-							<th>{headingLabel('work_item', config)}</th>
+							{#if showWorkItem}<th>{headingLabel('work_item', config)}</th>{/if}
 						</tr>
 					</thead>
 					{#each group.rows as row (`${row.session_id}-${row.start_at}`)}
@@ -92,18 +93,22 @@
 										/>
 									</td>
 								{/if}
-								<td>{cells.date}</td>
+								<td class="date">{cells.date}</td>
 								<td>{cells.start}</td>
 								<td>{cells.end}</td>
-								<td class="num">{hours(cells.minutes)}</td>
-								<td>
-									{cells.work_item}
-									{#if row.excluded}<span class="mark">Excluded</span>{/if}
-								</td>
+								<td class="num"
+									>{hours(cells.minutes)}{#if !showWorkItem && row.excluded}<span class="mark"
+											>Excluded</span
+										>{/if}</td
+								>
+								{#if showWorkItem}<td>
+										{cells.work_item}
+										{#if row.excluded}<span class="mark">Excluded</span>{/if}
+									</td>{/if}
 							</tr>
 							{#if row.note}
 								<tr class="note-row" class:excluded={row.excluded}>
-									<td colspan={picks ? 6 : 5}>
+									<td colspan={(picks ? 1 : 0) + 4 + (showWorkItem ? 1 : 0)}>
 										<span class="note-label">{headingLabel('note', config)}:</span>
 										{row.note}
 									</td>
@@ -211,6 +216,10 @@
 	th {
 		color: var(--ht-ink-2);
 		font: var(--ht-type-label);
+	}
+
+	.date {
+		white-space: nowrap;
 	}
 
 	.num {

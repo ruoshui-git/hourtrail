@@ -61,6 +61,7 @@
 				longGap: readSetting('long_gap_min', value('long_gap_min')) ?? 60,
 				longSession: readSetting('long_session_min', value('long_session_min')) ?? 600,
 				notePrompt: readSetting('note_prompt', value('note_prompt')) ?? 'work',
+				durationFormat: readSetting('duration_format', value('duration_format')) ?? 'hm',
 			};
 		},
 		{
@@ -75,6 +76,7 @@
 			longGap: 60,
 			longSession: 600,
 			notePrompt: 'work' as const,
+			durationFormat: 'hm' as const,
 		},
 	);
 	const requestedDay = $derived(page.url.searchParams.get('day'));
@@ -110,7 +112,10 @@
 			data.current.items.filter((item) => item.deleted_at === null),
 			data.current.types.filter((type) => type.deleted_at === null),
 			data.current.places.filter((place) => place.deleted_at === null),
-			{ long_gap_min: data.current.longGap },
+			{
+				long_gap_min: data.current.longGap,
+				duration_format: data.current.durationFormat,
+			},
 			now,
 		),
 	);
@@ -290,7 +295,10 @@
 		onselect={selectSession}
 	/>
 	<p class="totals">
-		{formatMinutes(trail.totals.work)} work, {formatMinutes(trail.totals.other)} other
+		{formatMinutes(trail.totals.work, data.current.durationFormat)} work, {formatMinutes(
+			trail.totals.other,
+			data.current.durationFormat,
+		)} other
 	</p>
 	{#if trail.rows.some((row) => row.kind === 'session')}<TrailList
 			rows={trail.rows}

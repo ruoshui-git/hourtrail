@@ -19,12 +19,14 @@
 		bars,
 		showTable = true,
 		height = 'regular',
+		format = 'hm',
 	}: {
 		title: string;
 		series: ChartSeries[];
 		bars: ChartBar[];
 		showTable?: boolean;
 		height?: 'regular' | 'compact';
+		format?: 'hm' | 'decimal';
 	} = $props();
 
 	// The viewBox is the measured container width, so one unit is one CSS px and the column cap
@@ -120,10 +122,10 @@
 				...series.map((item) => ({
 					key: item.key,
 					label: item.label,
-					value: formatMinutes(column.ordered.values[item.key] ?? 0),
+					value: formatMinutes(column.ordered.values[item.key] ?? 0, format),
 					color: item.color,
 				})),
-				{ key: 'total', label: 'Total', value: formatMinutes(column.total) },
+				{ key: 'total', label: 'Total', value: formatMinutes(column.total, format) },
 			],
 		};
 	});
@@ -145,18 +147,18 @@
 			...Object.fromEntries(
 				series.map((item, index) => [
 					`series${index}`,
-					formatMinutes(column.ordered.values[item.key] ?? 0),
+					formatMinutes(column.ordered.values[item.key] ?? 0, format),
 				]),
 			),
-			total: formatMinutes(column.total),
+			total: formatMinutes(column.total, format),
 		})),
 	);
 
 	function columnLabel(column: (typeof columns)[number]): string {
 		const parts = series.map(
-			(item) => `${item.label} ${formatMinutes(column.ordered.values[item.key] ?? 0)}`,
+			(item) => `${item.label} ${formatMinutes(column.ordered.values[item.key] ?? 0, format)}`,
 		);
-		return `${column.bar.label}: ${parts.join(', ')}. Total ${formatMinutes(column.total)}.`;
+		return `${column.bar.label}: ${parts.join(', ')}. Total ${formatMinutes(column.total, format)}.`;
 	}
 </script>
 
@@ -213,9 +215,9 @@
 								d={segmentPath(x, segment, position, column.segments.length)}
 							/>
 						{/each}
-						{#if column.total > 0 && fits(formatMinutes(column.total))}
+						{#if column.total > 0 && fits(formatMinutes(column.total, format))}
 							<text class="total" {x} y={yOf(column.total) - 6} text-anchor="middle"
-								>{formatMinutes(column.total)}</text
+								>{formatMinutes(column.total, format)}</text
 							>
 						{:else if column.total === 0 && fits('0m')}
 							<text class="total" {x} y={yOf(0) - 6} text-anchor="middle">0m</text>

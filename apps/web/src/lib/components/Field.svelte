@@ -24,7 +24,9 @@
 	<label for={id}>{label}</label>
 	{@render children({ id, describedBy, invalid: Boolean(error) })}
 	{#if hint}<p class="hint" id={`${id}-hint`}>{hint}</p>{/if}
-	{#if error}<p class="error" id={`${id}-error`}><CircleAlert aria-hidden="true" />{error}</p>{/if}
+	{#if error}<p class="error" id={`${id}-error`} role="alert">
+			<CircleAlert aria-hidden="true" />{error}
+		</p>{/if}
 </div>
 
 <style>

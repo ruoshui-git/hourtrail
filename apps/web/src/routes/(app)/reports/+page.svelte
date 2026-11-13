@@ -13,12 +13,12 @@
 	import {
 		BarChart,
 		DataTable,
+		DateInput,
 		EmptyState,
 		Field,
 		IconButton,
 		SegmentedControl,
 		StatTile,
-		TextInput,
 	} from '$lib/components';
 	import { db } from '$lib/db/app';
 	import { live } from '$lib/live.svelte';
@@ -207,20 +207,10 @@
 	{#if unit === 'custom'}
 		<div class="custom">
 			<Field label="From">
-				{#snippet children(props)}<TextInput
-						{...props}
-						bind:value={customFrom}
-						placeholder="2026-11-01"
-						autocomplete="off"
-					/>{/snippet}
+				{#snippet children(props)}<DateInput {...props} bind:value={customFrom} />{/snippet}
 			</Field>
 			<Field label="To" error={customError ?? undefined}>
-				{#snippet children(props)}<TextInput
-						{...props}
-						bind:value={customTo}
-						placeholder="2026-11-30"
-						autocomplete="off"
-					/>{/snippet}
+				{#snippet children(props)}<DateInput {...props} bind:value={customTo} />{/snippet}
 			</Field>
 		</div>
 	{/if}
@@ -252,17 +242,18 @@
 					<StatTile label="Work hours" value={formatHours(stats.work_minutes, format)} />
 					{#each otherTypes as type (type.type_id)}
 						<div class="minor">
-							<StatTile label={type.name} value={formatHours(type.minutes, format)} />
+							<StatTile label={type.name} value={formatHours(type.minutes, format)} size="md" />
 						</div>
 					{/each}
 					<div class="minor">
-						<StatTile label="Sessions" value={String(stats.session_count)} />
+						<StatTile label="Sessions" value={String(stats.session_count)} size="md" />
 					</div>
 				</div>
 				<BarChart
 					title={stats.bar_unit === 'day' ? 'Time by day' : 'Time by week'}
 					{series}
 					{bars}
+					{format}
 					showTable={false}
 				/>
 				<DataTable
@@ -274,7 +265,7 @@
 					footer={periodTable.footer}
 				/>
 			</div>
-			<Breakdowns sets={breakdownSets} />
+			<Breakdowns sets={breakdownSets} {format} />
 		</div>
 	{/if}
 
@@ -337,9 +328,6 @@
 	}
 
 	/* Other types and sessions read smaller than the headline figure. */
-	.minor :global(.value) {
-		font: var(--ht-type-heading);
-	}
 
 	.create {
 		justify-self: start;

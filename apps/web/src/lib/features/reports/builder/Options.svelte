@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { monthBounds, type ActivityType, type Day } from '@hourtrail/core';
-	import { Field, Select, SegmentedControl, Switch, TextInput } from '$lib/components';
+	import { DateInput, Field, Select, SegmentedControl, Switch, TextInput } from '$lib/components';
 	import {
 		GROUP_OPTIONS,
 		headingFields,
@@ -70,20 +70,10 @@
 		{#if form.rangeChoice === 'custom'}
 			<div class="custom">
 				<Field label="From" error={customError ?? undefined}>
-					{#snippet children(props)}<TextInput
-							{...props}
-							bind:value={form.customFrom}
-							placeholder="2026-11-01"
-							autocomplete="off"
-						/>{/snippet}
+					{#snippet children(props)}<DateInput {...props} bind:value={form.customFrom} />{/snippet}
 				</Field>
 				<Field label="To">
-					{#snippet children(props)}<TextInput
-							{...props}
-							bind:value={form.customTo}
-							placeholder="2026-11-30"
-							autocomplete="off"
-						/>{/snippet}
+					{#snippet children(props)}<DateInput {...props} bind:value={form.customTo} />{/snippet}
 				</Field>
 			</div>
 		{/if}
