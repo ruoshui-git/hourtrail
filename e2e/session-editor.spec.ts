@@ -237,6 +237,12 @@ test('session editor supports manual entry, safe edits, warnings, delete undo, a
 		});
 	}
 	await page.getByRole('button', { name: 'Add session' }).click();
+	// The add is an async IndexedDB write; poll until it has landed instead of reading once.
+	await expect
+		.poll(async () =>
+			(await readData(page)).sessions.some((session) => session.start_at === times.overlapStart),
+		)
+		.toBe(true);
 	updated = await readData(page);
 	const overlap = updated.sessions.find((session) => session.start_at === times.overlapStart)!;
 	await page.goto(`/dev/editor?id=${encodeURIComponent(overlap.id)}`);
@@ -245,9 +251,12 @@ test('session editor supports manual entry, safe edits, warnings, delete undo, a
 	await page.getByRole('button', { name: 'Delete session', exact: true }).last().click();
 	await expect(page.getByText('Session deleted')).toBeVisible();
 	await page.getByRole('button', { name: 'Undo' }).click();
-	expect(
-		(await readData(page)).sessions.find((session) => session.id === overlap.id)?.deleted_at,
-	).toBeNull();
+	await expect
+		.poll(
+			async () =>
+				(await readData(page)).sessions.find((session) => session.id === overlap.id)?.deleted_at,
+		)
+		.toBeNull();
 
 	await page.reload();
 	await page.goto(`/dev/editor?id=${encodeURIComponent(firstManual.id)}`);
