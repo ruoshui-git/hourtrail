@@ -342,6 +342,7 @@ describe('config schema', () => {
 		expect(parsed).toEqual({
 			title: 'Work report',
 			range: { from: '2026-01-01', to: '2026-01-02' },
+			relative_range: null,
 			type_ids: null,
 			group_by: 'work_item',
 			show_sessions: true,

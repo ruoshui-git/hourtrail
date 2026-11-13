@@ -1,5 +1,7 @@
-export { reportConfigSchema, HEADING_KEYS } from './config';
-export type { ReportConfig, HeadingKey } from './config';
+export { reportConfigSchema, HEADING_KEYS, RELATIVE_RANGES } from './config';
+export type { ReportConfig, HeadingKey, RelativeRange } from './config';
+export { resolveRange } from './relative';
+export type { ResolvedRange } from './relative';
 export { formatHours, headingLabel } from './format';
 export { report } from './report';
 export type { Report, ReportGroup, DayTotal } from './report';

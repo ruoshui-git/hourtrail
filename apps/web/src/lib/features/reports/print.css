@@ -1,0 +1,121 @@
+/* Loaded by the report builder. Everything here applies only when printing: ink on Canvas,
+   app chrome hidden, the preview sheet is the whole page. */
+@media print {
+	@page {
+		margin: 16mm;
+	}
+
+	html,
+	body {
+		background: Canvas !important;
+		color: CanvasText !important;
+	}
+
+	.desktop-nav,
+	.mobile-nav,
+	.builder-top,
+	.options,
+	.preview-bar,
+	.phone-preview-button,
+	[data-toast-region] {
+		display: none !important;
+	}
+
+	main {
+		padding: 0 !important;
+		min-height: 0 !important;
+	}
+
+	/* The preview is always printed, even when the phone preview screen is closed. */
+	.preview {
+		display: block !important;
+		position: static !important;
+		inset: auto !important;
+		overflow: visible !important;
+		padding: 0 !important;
+		background: Canvas !important;
+	}
+
+	.print-sheet {
+		display: block;
+		max-width: 178mm;
+		margin: 0;
+		padding: 0;
+		border: 0;
+		border-radius: 0;
+		background: Canvas;
+		color: CanvasText;
+	}
+
+	.print-sheet * {
+		color: CanvasText !important;
+		background: transparent !important;
+		box-shadow: none !important;
+	}
+
+	.print-sheet h2 {
+		margin: 0 0 2mm;
+	}
+
+	.print-sheet .sheet-head,
+	.print-sheet .totals,
+	.print-sheet .group {
+		margin-bottom: 5mm;
+	}
+
+	.print-sheet .totals {
+		border-bottom: 0.3mm solid CanvasText;
+		padding-bottom: 2mm;
+	}
+
+	.print-sheet .line {
+		margin: 0;
+	}
+
+	.print-sheet h3 {
+		margin: 0 0 1.5mm;
+		break-after: avoid;
+	}
+
+	.print-sheet table {
+		width: 100%;
+		border-collapse: collapse;
+	}
+
+	.print-sheet thead {
+		display: table-header-group;
+	}
+
+	.print-sheet tr,
+	.print-sheet tbody.session {
+		break-inside: avoid;
+	}
+
+	.print-sheet th,
+	.print-sheet td {
+		border-bottom: 0.2mm solid CanvasText;
+		padding: 1mm 1.5mm;
+	}
+
+	.print-sheet .pick,
+	.print-sheet tr.excluded,
+	.print-sheet tbody.excluded {
+		display: none !important;
+	}
+
+	.print-sheet .mark {
+		display: none;
+	}
+
+	.print-sheet .sheet-foot {
+		margin-top: 6mm;
+	}
+
+	.print-sheet .range,
+	.print-sheet .caption,
+	.print-sheet .note-label,
+	.print-sheet .sheet-foot,
+	.print-sheet .note-row td {
+		color: CanvasText !important;
+	}
+}
