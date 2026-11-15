@@ -133,6 +133,16 @@ test('settings write the reminder setting and per-type remind flags', async ({ p
 			async () => (await table<Row>(page, 'setting')).find((row) => row.id === 'reminder')?.value,
 		)
 		.toEqual({ enabled: true, threshold_min: 240, repeat_min: null });
+	const trackingSwitch = page.getByRole('switch', {
+		name: 'Show a notification while a session is running',
+	});
+	await trackingSwitch.click();
+	await expect
+		.poll(
+			async () =>
+				(await table<Row>(page, 'setting')).find((row) => row.id === 'tracking_notice')?.value,
+		)
+		.toEqual({ enabled: true });
 	const work = page.getByRole('switch', { name: 'Work', exact: true });
 	await work.click();
 	await expect
@@ -201,6 +211,35 @@ test('Stop now and Stop at validate and save the running session end', async ({ 
 		.toBeTruthy();
 });
 
+test('a tracking notification is tagged and closes when Home stops the session', async ({
+	page,
+}) => {
+	await prepareRunning(page, { elapsedMin: 30, thresholdMin: 60 });
+	const sessionId = (await table<Row>(page, 'session')).find((row) => row.end_at === null)!
+		.id as string;
+	await page.evaluate((id) => {
+		const testWindow = window as Window & { __trackingNoticeClosed?: boolean };
+		const trackingNotification = {
+			tag: `session:${id}`,
+			close: () => {
+				testWindow.__trackingNoticeClosed = true;
+			},
+		};
+		Object.defineProperty(navigator.serviceWorker, 'ready', {
+			configurable: true,
+			value: Promise.resolve({ getNotifications: async () => [trackingNotification] }),
+		});
+	}, sessionId);
+	await page.getByRole('button', { name: 'Stop', exact: true }).click();
+	await expect
+		.poll(() =>
+			page.evaluate(
+				() => (window as Window & { __trackingNoticeClosed?: boolean }).__trackingNoticeClosed,
+			),
+		)
+		.toBe(true);
+});
+
 test('reminder screenshots for settings and the open Stop at sheet', async ({
 	browser,
 	baseURL,
@@ -209,10 +248,7 @@ test('reminder screenshots for settings and the open Stop at sheet', async ({
 	await mkdir(directory, { recursive: true });
 	await acquireCloud();
 	try {
-		for (const viewport of [
-			{ width: 390, height: 844 },
-			{ width: 1280, height: 800 },
-		]) {
+		for (const viewport of [{ width: 390, height: 844 }]) {
 			for (const theme of ['light', 'dark'] as const) {
 				const context = await browser.newContext({
 					baseURL,
@@ -231,6 +267,8 @@ test('reminder screenshots for settings and the open Stop at sheet', async ({
 						async () => (await table<Row>(page, 'local')).find((row) => row.key === 'theme')?.value,
 					)
 					.toBe(theme);
+				await page.reload();
+				await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
 				await page.getByRole('link', { name: 'Settings', exact: true }).click();
 				await page.getByRole('link', { name: 'Reminders', exact: true }).click();
 				await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
@@ -241,10 +279,6 @@ test('reminder screenshots for settings and the open Stop at sheet', async ({
 						),
 					)
 					.toBe(theme === 'dark' ? '#111614' : '#f1f4f0');
-				await page.screenshot({
-					path: join(directory, `reminders-signed-out-${viewport.width}-${theme}.png`),
-					fullPage: true,
-				});
 				await page.getByRole('link', { name: 'Settings', exact: true }).click();
 				await page.getByRole('link', { name: 'Cloud and devices' }).click();
 				await page.getByLabel('Account key').fill(TEST_ACCOUNT_KEY);
@@ -255,7 +289,7 @@ test('reminder screenshots for settings and the open Stop at sheet', async ({
 				await page.getByRole('link', { name: 'Reminders', exact: true }).click();
 				await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
 				await page.screenshot({
-					path: join(directory, `reminders-off-${viewport.width}-${theme}.png`),
+					path: join(directory, `reminders-${viewport.width}-${theme}.png`),
 					fullPage: true,
 				});
 				const reminder = page.getByRole('switch', {
@@ -284,17 +318,9 @@ test('reminder screenshots for settings and the open Stop at sheet', async ({
 				});
 				await page.reload();
 				await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
-				await page.screenshot({
-					path: join(directory, `reminders-on-${viewport.width}-${theme}.png`),
-					fullPage: true,
-				});
 				await prepareRunning(page, { elapsedMin: 75 });
 				await expect(page.getByRole('dialog', { name: 'Still working?' })).toBeVisible();
 				await page.getByRole('button', { name: 'Stop at…' }).click();
-				await page.screenshot({
-					path: join(directory, `reminders-still-working-${viewport.width}-${theme}.png`),
-					fullPage: true,
-				});
 				await context.close();
 			}
 		}

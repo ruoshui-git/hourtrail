@@ -1,6 +1,6 @@
 import { Buffer } from 'node:buffer';
 import { describe, expect, it } from 'vitest';
-import { dueReminders, type ReminderInput } from './index';
+import { dueReminders, trackingNotices, type ReminderInput } from './index';
 
 const now = 20_000_000;
 const minute = 60_000;
@@ -114,5 +114,62 @@ describe('dueReminders', () => {
 		expect(reminder.notification.body).toBe(`${'库'.repeat(80)}… has been running for 4h 00m.`);
 		const payload = JSON.stringify({ web_push: 8030, notification: reminder.notification });
 		expect(Buffer.byteLength(payload, 'utf8')).toBeLessThan(512);
+	});
+});
+
+describe('trackingNotices', () => {
+	const start = Date.UTC(2026, 10, 15, 14, 5);
+	const session = {
+		id: 'tracking-session',
+		start_at: start,
+		start_tz: 'America/New_York',
+		work_item_name: '库存管理系统开发',
+		end_at: null,
+	};
+	const input = (overrides: Partial<Parameters<typeof trackingNotices>[0]> = {}) => ({
+		sessions: [session],
+		setting: { enabled: true },
+		sent_session_ids: [],
+		...overrides,
+	});
+	it('sends once per running session with a session tag and localized start time', () => {
+		const notice = trackingNotices(input(), start)[0]!;
+		expect(notice.notification).toEqual({
+			title: 'Tracking',
+			body: '库存管理系统开发 since 9:05 AM',
+			tag: 'session:tracking-session',
+			navigate: '/',
+		});
+		expect(trackingNotices(input({ sent_session_ids: [session.id] }), start)).toEqual([]);
+	});
+	it('returns none when disabled or stopped and uses the fallback name', () => {
+		expect(trackingNotices(input({ setting: { enabled: false } }), start)).toEqual([]);
+		expect(
+			trackingNotices(input({ sessions: [{ ...session, end_at: start + 1 }] }), start),
+		).toEqual([]);
+		expect(
+			trackingNotices(input({ sessions: [{ ...session, start_at: start + 1 }] }), start),
+		).toEqual([]);
+		expect(
+			trackingNotices(input({ sessions: [{ ...session, work_item_name: null }] }), start)[0]
+				?.notification.body,
+		).toBe('Untitled session since 9:05 AM');
+	});
+	it('formats the same instant in the session zone and falls back to UTC for an invalid zone', () => {
+		const tokyo = trackingNotices(
+			input({ sessions: [{ ...session, start_tz: 'Asia/Tokyo' }] }),
+			start,
+		)[0]!;
+		expect(tokyo.notification.body).toBe('库存管理系统开发 since 11:05 PM');
+		const invalid = trackingNotices(
+			input({ sessions: [{ ...session, start_tz: 'not/a-zone' }] }),
+			start,
+		)[0]!;
+		expect(invalid.notification.body).toBe('库存管理系统开发 since 2:05 PM');
+		const missing = trackingNotices(
+			input({ sessions: [{ ...session, start_tz: undefined as unknown as string }] }),
+			start,
+		)[0]!;
+		expect(missing.notification.body).toBe('库存管理系统开发 since 2:05 PM');
 	});
 });

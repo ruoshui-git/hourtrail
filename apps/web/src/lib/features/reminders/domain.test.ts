@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
 	defaultReminderEnd,
 	parseReminderPush,
@@ -31,9 +31,19 @@ describe('reminder decisions', () => {
 	it('accepts only a complete same-origin path push notification', () => {
 		expect(
 			parseReminderPush({
+				notification: {
+					title: 'Tracking',
+					body: 'Long session',
+					navigate: '/',
+					tag: 'session:s',
+				},
+			})?.notification,
+		).toEqual({ title: 'Tracking', body: 'Long session', navigate: '/', tag: 'session:s' });
+		expect(
+			parseReminderPush({
 				notification: { title: 'Still working?', body: 'Long session', navigate: '/?check=s' },
-			})?.notification.navigate,
-		).toBe('/?check=s');
+			})?.notification,
+		).toEqual({ title: 'Still working?', body: 'Long session', navigate: '/?check=s' });
 		expect(
 			parseReminderPush({
 				notification: { title: 'x', body: 'y', navigate: 'https://example.com' },
@@ -44,6 +54,7 @@ describe('reminder decisions', () => {
 	it('registers push and click handlers against a fake service worker scope', async () => {
 		const listeners = new Map<string, (event: never) => void>();
 		const shown: unknown[] = [];
+		const setAppBadge = vi.fn();
 		const navigated: string[] = [];
 		let focused = false;
 		let closed = false;
@@ -54,6 +65,7 @@ describe('reminder decisions', () => {
 					shown.push(args);
 				},
 			},
+			navigator: { setAppBadge },
 			clients: {
 				matchAll: async () => [
 					{
@@ -75,7 +87,27 @@ describe('reminder decisions', () => {
 		listeners.get('push')!({
 			data: {
 				json: () => ({
-					notification: { title: 'Still working?', body: '4h 12m', navigate: '/?check=s' },
+					notification: {
+						title: 'Tracking',
+						body: 'Since 9:00 AM',
+						navigate: '/',
+						tag: 'session:s',
+					},
+				}),
+			},
+			waitUntil: (promise: Promise<unknown>) => {
+				waited = promise;
+			},
+		} as never);
+		await waited;
+		listeners.get('push')!({
+			data: {
+				json: () => ({
+					notification: {
+						title: 'Still working?',
+						body: '4h 12m',
+						navigate: '/?check=s',
+					},
 				}),
 			},
 			waitUntil: (promise: Promise<unknown>) => {
@@ -84,8 +116,18 @@ describe('reminder decisions', () => {
 		} as never);
 		await waited;
 		expect(shown).toEqual([
+			[
+				'Tracking',
+				{
+					body: 'Since 9:00 AM',
+					data: { navigate: '/' },
+					tag: 'session:s',
+					renotify: false,
+				},
+			],
 			['Still working?', { body: '4h 12m', data: { navigate: '/?check=s' } }],
 		]);
+		expect(setAppBadge).toHaveBeenCalledExactlyOnceWith(1);
 		listeners.get('notificationclick')!({
 			notification: {
 				data: { navigate: '/?check=s' },

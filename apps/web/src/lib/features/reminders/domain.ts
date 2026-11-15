@@ -29,7 +29,7 @@ export function shouldPromptReminder(input: {
 }
 
 export function parseReminderPush(value: unknown): {
-	notification: { title: string; body: string; navigate: string };
+	notification: { title: string; body: string; navigate: string; tag?: string };
 } | null {
 	if (!value || typeof value !== 'object') return null;
 	const notification = (value as { notification?: unknown }).notification;
@@ -40,10 +40,18 @@ export function parseReminderPush(value: unknown): {
 		typeof record.body !== 'string' ||
 		typeof record.navigate !== 'string' ||
 		!record.navigate.startsWith('/') ||
-		record.navigate.startsWith('//')
+		record.navigate.startsWith('//') ||
+		(record.tag !== undefined && typeof record.tag !== 'string')
 	)
 		return null;
-	return { notification: { title: record.title, body: record.body, navigate: record.navigate } };
+	return {
+		notification: {
+			title: record.title,
+			body: record.body,
+			navigate: record.navigate,
+			...(typeof record.tag === 'string' ? { tag: record.tag } : {}),
+		},
+	};
 }
 
 type NotificationClient = {
@@ -55,9 +63,15 @@ export type ReminderWorkerScope = {
 	registration: {
 		showNotification(
 			title: string,
-			options: { body: string; data: { navigate: string } },
+			options: {
+				body: string;
+				data: { navigate: string };
+				tag?: string;
+				renotify?: false;
+			},
 		): Promise<void>;
 	};
+	navigator?: { setAppBadge?(value?: number): Promise<void> | void };
 	clients: {
 		matchAll(options: { type: 'window'; includeUncontrolled: true }): Promise<NotificationClient[]>;
 		openWindow(url: string): Promise<unknown>;
@@ -83,10 +97,22 @@ export function registerReminderHandlers(scope: ReminderWorkerScope): void {
 		const payload = parseReminderPush(event.data?.json());
 		if (!payload) return;
 		event.waitUntil(
-			scope.registration.showNotification(payload.notification.title, {
-				body: payload.notification.body,
-				data: { navigate: payload.notification.navigate },
-			}),
+			(() => {
+				if (payload.notification.tag?.startsWith('session:')) {
+					try {
+						void Promise.resolve(scope.navigator?.setAppBadge?.(1)).catch(() => {});
+					} catch {
+						// Badging is optional and must not prevent the notification.
+					}
+				}
+				return scope.registration.showNotification(payload.notification.title, {
+					body: payload.notification.body,
+					data: { navigate: payload.notification.navigate },
+					...(payload.notification.tag
+						? { tag: payload.notification.tag, renotify: false as const }
+						: {}),
+				});
+			})(),
 		);
 	});
 

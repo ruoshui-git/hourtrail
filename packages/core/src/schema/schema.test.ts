@@ -357,6 +357,7 @@ describe('settings and default activity types', () => {
 			reporting_tz: null,
 			week_start: 1,
 			reminder: { enabled: false, threshold_min: 240, repeat_min: null },
+			tracking_notice: { enabled: false },
 			sync_raw_gps: false,
 			long_gap_min: 60,
 			long_session_min: 600,
@@ -385,6 +386,8 @@ describe('settings and default activity types', () => {
 		expect(
 			readSetting('reminder', { enabled: true, threshold_min: '120', repeat_min: null }),
 		).toEqual(SETTING_DEFAULTS.reminder);
+		expect(readSetting('tracking_notice', { enabled: true })).toEqual({ enabled: true });
+		expect(readSetting('tracking_notice', { enabled: 'yes' })).toEqual({ enabled: false });
 		expect(readSetting('sync_raw_gps', true)).toBe(true);
 		expect(readSetting('long_gap_min', 90)).toBe(90);
 		expect(readSetting('long_session_min', 720)).toBe(720);

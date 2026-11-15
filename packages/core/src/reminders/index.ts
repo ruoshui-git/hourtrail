@@ -14,6 +14,51 @@ export type ReminderInput = {
 	state: readonly ReminderState[];
 };
 
+export type TrackingNoticeSession = Pick<Session, 'id' | 'start_at' | 'start_tz'> & {
+	end_at?: number | null;
+	work_item_name: string | null;
+};
+export type TrackingNotice = {
+	session_id: string;
+	notification: { title: string; body: string; tag: string; navigate: '/' };
+};
+export type TrackingNoticeInput = {
+	sessions: readonly TrackingNoticeSession[];
+	setting: SettingValues['tracking_notice'];
+	sent_session_ids: readonly string[];
+};
+
+/** Decide which running sessions need their one-time tracking notice. */
+export function trackingNotices(input: TrackingNoticeInput, now: number): TrackingNotice[] {
+	if (!input.setting.enabled) return [];
+	const sent = new Set(input.sent_session_ids);
+	return input.sessions
+		.filter((session) => session.end_at == null && session.start_at <= now && !sent.has(session.id))
+		.sort((a, b) => a.start_at - b.start_at || a.id.localeCompare(b.id))
+		.map((session) => {
+			let timeZone = session.start_tz || 'UTC';
+			try {
+				timeZone = new Intl.DateTimeFormat('en-US', { timeZone }).resolvedOptions().timeZone;
+			} catch {
+				timeZone = 'UTC';
+			}
+			const time = new Intl.DateTimeFormat('en-US', {
+				timeZone,
+				hour: 'numeric',
+				minute: '2-digit',
+			}).format(session.start_at);
+			return {
+				session_id: session.id,
+				notification: {
+					title: 'Tracking',
+					body: `${session.work_item_name || 'Untitled session'} since ${time}`,
+					tag: `session:${session.id}`,
+					navigate: '/',
+				},
+			};
+		});
+}
+
 const graphemes = new Intl.Segmenter('en', { granularity: 'grapheme' });
 
 /** Keep at most 80 name code points, cutting only between whole graphemes. */

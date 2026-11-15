@@ -10,13 +10,31 @@
 	import SyncControl from '$lib/features/sync/ui/SyncControl.svelte';
 	import { db } from '$lib/db/app';
 	import { setClockOffset } from '$lib/features/clock/clock';
+	import { repo } from '$lib/db/app';
+	import { live } from '$lib/live.svelte';
+	import { updateTrackingIndicators } from '$lib/features/badge/domain';
+	import type { Session } from '@hourtrail/core';
 
 	let { children }: { children: Snippet } = $props();
+	const running = live(() => repo.running(), null as Session[] | null);
 
 	// Seed default types and the reporting zone once, outside any live query.
 	$effect(() => {
 		void prepareLocalData();
 		void db.local.get('clock_offset_ms').then((row) => setClockOffset(row?.value));
+	});
+	$effect(() => {
+		const sessions = running.current;
+		if (sessions === null) return;
+		void updateTrackingIndicators(
+			sessions.map((session) => session.id),
+			{
+				notificationsPermission:
+					typeof Notification === 'undefined' ? 'default' : Notification.permission,
+				client: navigator,
+				...('serviceWorker' in navigator ? { serviceWorker: navigator.serviceWorker } : {}),
+			},
+		);
 	});
 	$effect(() => {
 		if (

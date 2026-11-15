@@ -47,6 +47,7 @@ beforeEach(async () => {
 		env.DB.prepare('DELETE FROM link_codes'),
 		env.DB.prepare('DELETE FROM push_subscriptions'),
 		env.DB.prepare('DELETE FROM reminder_state'),
+		env.DB.prepare('DELETE FROM tracking_notice_state'),
 		env.DB.prepare('DELETE FROM devices'),
 		env.DB.prepare('DELETE FROM meta'),
 	]);
@@ -98,6 +99,7 @@ async function seed(
 		deleted_at: null,
 	};
 	await store('setting', { ...common, id: 'reminder', value: setting });
+	await store('setting', { ...common, id: 'tracking_notice', value: { enabled: false } });
 	const workId = newId(now);
 	await store('work_item', {
 		...common,
@@ -124,6 +126,10 @@ async function cron(time = now, cronEnv = bindings) {
 }
 async function state() {
 	return (await env.DB.prepare('SELECT * FROM reminder_state ORDER BY session_id').all()).results;
+}
+async function trackingState() {
+	return (await env.DB.prepare('SELECT * FROM tracking_notice_state ORDER BY session_id').all())
+		.results;
 }
 async function payload(request: Request) {
 	return JSON.parse(await decryptPush(await request.clone().arrayBuffer(), receiver));
@@ -247,6 +253,56 @@ describe('push subscription routes', () => {
 });
 
 describe('reminder cron', () => {
+	it('sends a tracking notice once per session to subscriptions and ignores it after Stop', async () => {
+		const { sessions } = await seed(1, 2);
+		await store('setting', {
+			id: 'reminder',
+			value: { enabled: false, threshold_min: 240, repeat_min: null },
+		});
+		await store('setting', { id: 'tracking_notice', value: { enabled: true } });
+		await cron();
+		expect(captured).toHaveLength(2);
+		const notice = await payload(captured[0]!);
+		expect(notice).toMatchObject({
+			web_push: 8030,
+			notification: {
+				title: 'Tracking',
+				body: '库存管理系统开发 第1寺院 修复洗手台 since 4:00 AM',
+				tag: `session:${sessions[0]!.id}`,
+				navigate: '/',
+			},
+		});
+		expect(await trackingState()).toEqual([{ session_id: sessions[0]!.id, sent_at: now }]);
+		await cron(now + 5 * minute);
+		expect(captured).toHaveLength(2);
+		await store('session', { ...sessions[0]!, end_at: now + 5 * minute });
+		await cron(now + 10 * minute);
+		expect(captured).toHaveLength(2);
+		expect(await trackingState()).toEqual([]);
+	});
+	it('does not send when tracking notices are disabled', async () => {
+		await seed();
+		await store('setting', {
+			id: 'reminder',
+			value: { enabled: false, threshold_min: 240, repeat_min: null },
+		});
+		await store('setting', { id: 'tracking_notice', value: { enabled: false } });
+		await cron();
+		expect(captured).toHaveLength(0);
+		expect(await trackingState()).toEqual([]);
+	});
+	it('shares the 40-send budget with reminders and preserves reminder priority', async () => {
+		await seed(14, 3);
+		await store('setting', { id: 'tracking_notice', value: { enabled: true } });
+		await cron();
+		expect(captured).toHaveLength(39);
+		expect(
+			(await Promise.all(captured.map(payload))).every(
+				(push) => push.notification.title === 'Still working?',
+			),
+		).toBe(true);
+		expect(await trackingState()).toEqual([]);
+	});
 	it('sends exactly due sessions to every device, preserves all records, and sends only after the repeat interval', async () => {
 		const { sessions } = await seed(2, 3, { enabled: true, threshold_min: 240, repeat_min: 30 });
 		for (const changes of [
@@ -262,7 +318,7 @@ describe('reminder cron', () => {
 		await cron(now, { ...bindings, DB: db.bindings.DB });
 		expect(db.calls()).toBe(3); // One joined decision read, one subscription read, one write batch.
 		expect(db.batches).toHaveLength(1);
-		expect(db.batches[0]).toHaveLength(2);
+		expect(db.batches[0]).toHaveLength(4);
 		expect(captured).toHaveLength(6);
 		const delivered = await Promise.all(captured.map(payload));
 		for (const record of sessions) {

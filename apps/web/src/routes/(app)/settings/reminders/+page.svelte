@@ -17,6 +17,7 @@
 	import { emptyResponseSchema } from '$lib/features/reminders/push';
 
 	let value = $state({ enabled: false, threshold_min: 240, repeat_min: null as number | null });
+	let trackingNotice = $state({ enabled: false });
 	let types = $state<{ id: string; name: string; remind: boolean }[]>([]);
 	let signedIn = $state(false);
 	let subscribed = $state(false);
@@ -29,12 +30,14 @@
 	});
 	async function load() {
 		await prepareLocalData();
-		const [setting, activityTypes, state] = await Promise.all([
+		const [setting, trackingSetting, activityTypes, state] = await Promise.all([
 			db.setting.get('reminder'),
+			db.setting.get('tracking_notice'),
 			db.activity_type.filter((x) => x.deleted_at === null).toArray(),
 			db.local.get('push_state'),
 		]);
 		value = readSetting('reminder', setting?.value);
+		trackingNotice = readSetting('tracking_notice', trackingSetting?.value);
 		thresholdChoice = String(value.threshold_min);
 		repeatChoice = value.repeat_min === null ? 'once' : String(value.repeat_min);
 		types = activityTypes.map((type) => ({ id: type.id, name: type.name, remind: type.remind }));
@@ -48,6 +51,13 @@
 		if (current) await repo.update('setting', 'reminder', { value: parsed });
 		else await repo.create('setting', { id: 'reminder', value: parsed });
 		value = parsed;
+	}
+	async function saveTrackingNotice(next: { enabled: boolean }) {
+		const current = await db.setting.get('tracking_notice');
+		const parsed = settingSchemas.tracking_notice.parse(next);
+		if (current) await repo.update('setting', 'tracking_notice', { value: parsed });
+		else await repo.create('setting', { id: 'tracking_notice', value: parsed });
+		trackingNotice = parsed;
 	}
 	$effect(() => {
 		const threshold = Number(thresholdChoice);
@@ -162,6 +172,12 @@
 				]}
 			/>{/snippet}</Field
 	>
+	<Switch
+		label="Show a notification while a session is running"
+		hint="Sent from the cloud a few minutes after you start, and cleared when you stop on this device."
+		checked={trackingNotice.enabled}
+		onchange={(enabled) => void saveTrackingNotice({ enabled })}
+	/>
 	<h2>Remind for these types</h2>
 	{#each types as type (type.id)}<Switch
 			label={type.name}
