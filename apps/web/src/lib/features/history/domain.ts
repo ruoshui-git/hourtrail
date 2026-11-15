@@ -19,7 +19,6 @@ export type DayModel = {
 	totals: { work: number; other: number };
 };
 
-const tickFormatter = new Intl.DateTimeFormat(undefined, { hour: 'numeric' });
 // One duration style across the app (DESIGN_SYSTEM Voice): "2h 14m", "45m".
 const duration = (minutes: number, format: 'hm' | 'decimal') => formatMinutes(minutes, format);
 
@@ -61,7 +60,7 @@ export function buildDay(
 				id: `gap:${gapStart}`,
 				start: gapStart,
 				end: gapEnd,
-				rangeLabel: `${formatClock(gapStart)} to ${formatClock(gapEnd)}`,
+				rangeLabel: `${formatClock(gapStart, tz)} to ${formatClock(gapEnd, tz)}`,
 				durationLabel: duration(gapMinutes, settings.duration_format ?? 'hm'),
 			});
 		}
@@ -70,8 +69,9 @@ export function buildDay(
 		rows.push({
 			kind: 'session',
 			id: session.id,
-			startLabel: slice.start <= dayStart ? formatClock(dayStart) : formatClock(slice.start),
-			endLabel: session.end_at === null ? null : formatClock(slice.end),
+			startLabel:
+				slice.start <= dayStart ? formatClock(dayStart, tz) : formatClock(slice.start, tz),
+			endLabel: session.end_at === null ? null : formatClock(slice.end, tz),
 			name: item?.name ?? null,
 			typeName: type?.name ?? 'Work',
 			typeColor: type?.color ?? 'lake',
@@ -87,14 +87,23 @@ export function buildDay(
 	}
 	const ticks = [0, 6, 12, 18].flatMap((hour) => {
 		const parsed = parseLocalDateTime(`${day}T${String(hour).padStart(2, '0')}:00`, tz);
-		return parsed.ok ? [{ at: parsed.instant, label: tickFormatter.format(parsed.instant) }] : [];
+		return parsed.ok
+			? [
+					{
+						at: parsed.instant,
+						label: new Intl.DateTimeFormat(undefined, { hour: 'numeric', timeZone: tz }).format(
+							parsed.instant,
+						),
+					},
+				]
+			: [];
 	});
 	const segments = slices.map(({ session, slice }) => ({
 		id: session.id,
 		start: slice.start,
 		end: session.end_at === null ? null : slice.end,
 		color: typeById.get(session.type_id)?.color ?? 'lake',
-		label: `${itemById.get(session.work_item_id ?? '')?.name ?? 'Untitled session'}, ${formatClock(slice.start)} to ${session.end_at === null ? 'now' : formatClock(slice.end)}`,
+		label: `${itemById.get(session.work_item_id ?? '')?.name ?? 'Untitled session'}, ${formatClock(slice.start, tz)} to ${session.end_at === null ? 'now' : formatClock(slice.end, tz)}`,
 	}));
 	return { dayStart, dayEnd, ticks, segments, rows, totals: { work, other } };
 }

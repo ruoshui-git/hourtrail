@@ -1,4 +1,10 @@
-import { DEFAULT_ACTIVITY_TYPES, splitByDay } from '@hourtrail/core';
+import {
+	DEFAULT_ACTIVITY_TYPES,
+	dayBounds,
+	dayOf,
+	parseLocalDateTime,
+	splitByDay,
+} from '@hourtrail/core';
 import type { BlazeKey, RecordOf } from '@hourtrail/core';
 
 type Session = RecordOf<'session'>;
@@ -108,7 +114,15 @@ export function todayTotals(
 	return { work, other };
 }
 
-const clock = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' });
+export function homeDay(instant: number, tz: string) {
+	const day = dayOf(instant, tz);
+	const bounds = dayBounds(day, tz);
+	const ticks = [0, 6, 12, 18].flatMap((hour) => {
+		const parsed = parseLocalDateTime(`${day}T${String(hour).padStart(2, '0')}:00`, tz);
+		return parsed.ok ? [{ at: parsed.instant, label: ['12a', '6a', '12p', '6p'][hour / 6]! }] : [];
+	});
+	return { day, ...bounds, ticks };
+}
 
 export function todayRibbonSegments(
 	sessions: Session[],
@@ -129,9 +143,12 @@ export function todayRibbonSegments(
 				end: session.end_at === null ? null : slice.end,
 				color: typeColors.get(session.type_id) ?? 'lake',
 				// A segment is a button: name what and when, e.g. "修复洗手台, 9:15 AM to now".
-				label: `${itemNames.get(session.work_item_id ?? '') ?? 'Untitled session'}, ${clock.format(
+				label: `${itemNames.get(session.work_item_id ?? '') ?? 'Untitled session'}, ${new Intl.DateTimeFormat(
+					undefined,
+					{ hour: 'numeric', minute: '2-digit', timeZone: tz },
+				).format(
 					session.start_at,
-				)} to ${session.end_at === null ? 'now' : clock.format(session.end_at)}`,
+				)} to ${session.end_at === null ? 'now' : new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit', timeZone: tz }).format(session.end_at)}`,
 			})),
 	);
 }

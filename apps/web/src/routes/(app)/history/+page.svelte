@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { formatMinutes } from '$lib/format';
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
@@ -12,10 +13,11 @@
 		review,
 		openIssueCount,
 		toLocalDateTime,
+		parseLocalDateTime,
 		type Day,
 	} from '@hourtrail/core';
 	import { Banner, Button, DayRibbon, EmptyState, FilterChip, TrailList } from '$lib/components';
-	import { db } from '$lib/db/app';
+	import { db, repo } from '$lib/db/app';
 	import { live } from '$lib/live.svelte';
 	import { openNewSession, openSessionEditor } from '$lib/features/session/editor.svelte';
 	import { buildDay } from '$lib/features/history/domain';
@@ -25,7 +27,18 @@
 	import SearchRows from '$lib/features/search/SearchRows.svelte';
 	import SessionEditor from '$lib/features/session/SessionEditor.svelte';
 
-	const deviceZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+	let deviceZone = $state(Intl.DateTimeFormat().resolvedOptions().timeZone);
+	function refreshDeviceZone() {
+		deviceZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+	}
+	onMount(() => {
+		window.addEventListener('pageshow', refreshDeviceZone);
+		document.addEventListener('visibilitychange', refreshDeviceZone);
+		return () => {
+			window.removeEventListener('pageshow', refreshDeviceZone);
+			document.removeEventListener('visibilitychange', refreshDeviceZone);
+		};
+	});
 	const initialNow = Date.now();
 	let now = $state(initialNow);
 	let timer: ReturnType<typeof setInterval>;
@@ -81,7 +94,7 @@
 			items: [],
 			types: [],
 			places: [],
-			zone: deviceZone,
+			zone: Intl.DateTimeFormat().resolvedOptions().timeZone,
 			gap: 60,
 			outbox: [],
 			conflicts: [],
@@ -215,11 +228,17 @@
 			row.kind === 'session' && pendingIds.has(row.id) ? { ...row, pending: true } : row,
 		),
 	);
-	const dayTitle = $derived(
-		new Intl.DateTimeFormat(undefined, { weekday: 'long', day: 'numeric', month: 'long' }).format(
-			new Date(`${selectedDay}T12:00:00`),
-		),
-	);
+	const dayTitle = $derived.by(() => {
+		const parsed = parseLocalDateTime(`${selectedDay}T12:00`, data.current.zone);
+		return parsed.ok
+			? new Intl.DateTimeFormat(undefined, {
+					weekday: 'long',
+					day: 'numeric',
+					month: 'long',
+					timeZone: data.current.zone,
+				}).format(parsed.instant)
+			: selectedDay;
+	});
 	const isToday = $derived(selectedDay === today);
 	const dayOpenIssues = $derived(
 		openIssueCount(
@@ -237,7 +256,7 @@
 				},
 				tz: data.current.zone,
 				now,
-				formatTime: (instant) => formatClock(instant),
+				formatTime: (instant) => formatClock(instant, data.current.zone),
 			}),
 		),
 	);
@@ -251,6 +270,11 @@
 	}
 	function addGap(gap: { start: number; end: number }) {
 		openNewSession({ start_at: gap.start, end_at: gap.end });
+	}
+	async function useDeviceZone() {
+		const existing = await db.setting.get('reporting_tz');
+		if (existing) await repo.update('setting', 'reporting_tz', { value: deviceZone });
+		else await repo.create('setting', { id: 'reporting_tz', value: deviceZone });
 	}
 </script>
 
@@ -361,6 +385,7 @@
 										>{new Intl.DateTimeFormat(undefined, {
 											hour: 'numeric',
 											minute: '2-digit',
+											timeZone: data.current.zone,
 										}).format(session.start_at)}</td
 									><td><MatchText text={item?.name ?? 'Untitled session'} {query} /></td><td
 										>{type?.name ?? 'Work'}</td
@@ -412,7 +437,13 @@
 					>{/if}
 			</header>
 			{#if data.current.zone !== deviceZone}
-				<Banner message={`Days are shown in ${data.current.zone}.`} />
+				<div class="zone-banner">
+					<Banner message={`Days are shown in ${data.current.zone}.`} /><Button
+						variant="quiet"
+						size="sm"
+						onclick={() => void useDeviceZone()}>Use {deviceZone}</Button
+					>
+				</div>
 			{/if}
 			<DayRibbon
 				dayStart={model.dayStart}

@@ -2,6 +2,7 @@ import { dayBounds, DEFAULT_ACTIVITY_TYPES, parseLocalDateTime } from '@hourtrai
 import type { RecordOf } from '@hourtrail/core';
 import { describe, expect, it } from 'vitest';
 import { buildDay } from './domain';
+import { formatClock } from '$lib/components/trail';
 
 const HOUR = 3_600_000;
 const zone = 'America/New_York';
@@ -30,6 +31,39 @@ function makeSession(start_at: number, end_at: number | null, id = 'session'): R
 }
 
 describe('buildDay', () => {
+	it('formats History row, gap, segment and tick labels in the reporting zone', () => {
+		const bounds = dayBounds('2026-11-12', 'Asia/Tokyo');
+		const result = buildDay(
+			'2026-11-12',
+			'Asia/Tokyo',
+			[makeSession(Date.parse('2026-11-12T00:00:00Z'), Date.parse('2026-11-12T02:00:00Z'))],
+			[],
+			[...DEFAULT_ACTIVITY_TYPES],
+			[],
+			{ long_gap_min: 1 },
+			0,
+		);
+		expect(result.rows[0]).toMatchObject({ startLabel: '9:00 AM', endLabel: '11:00 AM' });
+		expect(result.segments[0]?.label).toContain('9:00 AM to 11:00 AM');
+		expect(result.ticks[0]?.label).toBe('12 AM');
+		expect(formatClock(Date.parse('2026-11-12T00:00:00Z'), 'Asia/Tokyo')).toBe('9:00 AM');
+		const gap = buildDay(
+			'2026-11-12',
+			'Asia/Tokyo',
+			[
+				makeSession(bounds.start + 8 * HOUR, bounds.start + 9 * HOUR, 'first'),
+				makeSession(bounds.start + 11 * HOUR, bounds.start + 12 * HOUR, 'second'),
+			],
+			[],
+			[...DEFAULT_ACTIVITY_TYPES],
+			[],
+			{ long_gap_min: 60 },
+			bounds.start + 12 * HOUR,
+		);
+		expect(gap.rows.find((row) => row.kind === 'gap')).toMatchObject({
+			rangeLabel: '9:00 AM to 11:00 AM',
+		});
+	});
 	it('allocates a midnight crossing across days without double counting', () => {
 		const first = dayBounds('2026-11-11', zone).start + 22 * HOUR;
 		const session = makeSession(first, first + 4 * HOUR);

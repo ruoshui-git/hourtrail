@@ -27,7 +27,7 @@
 		showToast,
 	} from '$lib/components';
 	import SyncControl from '$lib/features/sync/ui/SyncControl.svelte';
-	import { db, repo } from '$lib/db/app';
+	import { db, ensureReportingZone, repo } from '$lib/db/app';
 	import { live } from '$lib/live.svelte';
 	import { requestPersistence } from '$lib/pwa/persist';
 	import { openSessionEditor } from '$lib/features/session/editor.svelte';
@@ -47,16 +47,28 @@
 	import { parseLocalDateTime, toLocalDateTime } from '@hourtrail/core';
 	import { defaultReminderEnd, shouldPromptReminder } from '$lib/features/reminders/domain';
 	import DateTimeInput from '$lib/components/DateTimeInput.svelte';
+	import { onMount } from 'svelte';
 
 	type Session = RecordOf<'session'>;
 	type WorkItem = RecordOf<'work_item'>;
 	type ActivityType = RecordOf<'activity_type'>;
 
-	const deviceZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+	let deviceZone = $state(Intl.DateTimeFormat().resolvedOptions().timeZone);
+	function refreshDeviceZone() {
+		deviceZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+	}
+	onMount(() => {
+		window.addEventListener('pageshow', refreshDeviceZone);
+		document.addEventListener('visibilitychange', refreshDeviceZone);
+		return () => {
+			window.removeEventListener('pageshow', refreshDeviceZone);
+			document.removeEventListener('visibilitychange', refreshDeviceZone);
+		};
+	});
 	const today = live(
 		async () => {
 			const stored = await db.setting.get('reporting_tz');
-			const reportingZone = readSetting('reporting_tz', stored?.value) ?? deviceZone;
+			const reportingZone = readSetting('reporting_tz', stored?.value);
 			const [
 				sessions,
 				types,
@@ -72,6 +84,8 @@
 				dayReviews,
 				outbox,
 				clockRow,
+				authRow,
+				cursorRow,
 			] = await Promise.all([
 				db.session.filter((row) => row.deleted_at === null).toArray(),
 				db.activity_type.filter((row) => row.deleted_at === null).toArray(),
@@ -87,6 +101,8 @@
 				db.day_review.toArray(),
 				db.outbox.toArray(),
 				db.local.get('clock_offset_ms'),
+				db.local.get('auth_device'),
+				db.local.get('sync_cursor'),
 			]);
 			setClockOffset(clockRow?.value);
 			return {
@@ -95,7 +111,7 @@
 				items,
 				places,
 				fixes,
-				reportingZone,
+				reportingZone: reportingZone ?? null,
 				conflicts,
 				marks,
 				dayReviews,
@@ -105,6 +121,8 @@
 				durationFormat: readSetting('duration_format', durationSetting?.value) ?? 'hm',
 				outbox,
 				clockOffsetMs: typeof clockRow?.value === 'number' ? clockRow.value : 0,
+				syncCursor: cursorRow?.value,
+				hasSignedIn: Boolean(authRow),
 			};
 		},
 		{
@@ -113,18 +131,26 @@
 			items: [],
 			places: [],
 			fixes: [],
-			reportingZone: deviceZone,
+			reportingZone: null as string | null,
 			conflicts: [],
 			marks: [],
 			dayReviews: [],
 			outbox: [],
 			clockOffsetMs: 0,
+			syncCursor: undefined,
+			hasSignedIn: false,
 			longGap: 60,
 			longSession: 600,
 			notePrompt: 'work' as const,
 			durationFormat: 'hm' as const,
 		},
 	);
+	$effect(() => {
+		// A newly linked device waits for its first pull before creating this shared setting.
+		void today.current.syncCursor;
+		void today.current.hasSignedIn;
+		if (today.current.reportingZone === null) void ensureReportingZone().catch(() => {});
+	});
 	const running = live(() => repo.running(), [] as Session[]);
 	const keepBoth = live(
 		() => db.local.get('home_keep_both' as never),
@@ -146,12 +172,12 @@
 	let reminderError = $state('');
 	let reminderThresholdMin = $state(240);
 	let prompted = $state(false);
-	const currentDay = $derived(dayOf(now, today.current.reportingZone));
+	const currentDay = $derived(dayOf(now, deviceZone));
 	const clockCaution = $derived(clockOffsetMinutes(today.current.clockOffsetMs));
 	const pendingKeys = $derived(
 		new Set(today.current.outbox.map(({ mutation }) => `${mutation.entity}:${mutation.record_id}`)),
 	);
-	const bounds = $derived(dayBounds(currentDay, today.current.reportingZone));
+	const bounds = $derived(dayBounds(currentDay, deviceZone));
 	const allSessions = $derived(today.current.sessions);
 	const daySessions = $derived(
 		allSessions.filter((session) => {
@@ -160,7 +186,7 @@
 		}),
 	);
 	const totals = $derived(
-		todayTotals(daySessions, today.current.types, currentDay, today.current.reportingZone, now),
+		todayTotals(daySessions, today.current.types, currentDay, deviceZone, now),
 	);
 	const yesterday = $derived(addDays(currentDay, -1));
 	const yesterdayIssues = $derived(
@@ -176,10 +202,14 @@
 				long_session_min: today.current.longSession,
 				note_prompt: today.current.notePrompt,
 			},
-			tz: today.current.reportingZone,
+			tz: deviceZone,
 			now,
 			formatTime: (instant) =>
-				new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(instant),
+				new Intl.DateTimeFormat(undefined, {
+					hour: 'numeric',
+					minute: '2-digit',
+					timeZone: deviceZone,
+				}).format(instant),
 		}),
 	);
 	const yesterdayOpenIssues = $derived(openIssueCount(yesterdayIssues));
@@ -277,17 +307,22 @@
 			daySessions,
 			today.current.items,
 			today.current.types,
-			today.current.reportingZone,
+			deviceZone,
 			currentDay,
 			now,
 		),
 	);
-	const ticks = $derived([
-		{ at: bounds.start, label: '12a' },
-		{ at: bounds.start + 6 * 60 * 60_000, label: '6a' },
-		{ at: bounds.start + 12 * 60 * 60_000, label: '12p' },
-		{ at: bounds.start + 18 * 60 * 60_000, label: '6p' },
-	]);
+	const ticks = $derived(
+		[0, 6, 12, 18].flatMap((hour) => {
+			const parsed = parseLocalDateTime(
+				`${currentDay}T${String(hour).padStart(2, '0')}:00`,
+				deviceZone,
+			);
+			return parsed.ok
+				? [{ at: parsed.instant, label: ['12a', '6a', '12p', '6p'][hour / 6]! }]
+				: [];
+		}),
+	);
 	const keepBothKey = $derived(running.current.length === 2 ? runningPairKey(running.current) : '');
 	const resolutions = $derived(
 		runningResolutionChoices(
@@ -587,7 +622,7 @@
 				Math.round((result.session.end_at! - result.session.start_at) / 60_000),
 			);
 			showToast({
-				message: `Stopped at ${formatClock(result.session.end_at!)}. ${duration(elapsed)}`,
+				message: `Stopped at ${formatClock(result.session.end_at!, deviceZone)}. ${duration(elapsed)}`,
 				undo: async () => {
 					await repo.undo(result.undo);
 				},
@@ -655,12 +690,20 @@
 				weekday: 'short',
 				day: 'numeric',
 				month: 'short',
+				timeZone: deviceZone,
 			}).format(now)}
 		</h1>
 		<!-- Phones show the badge here; desktop shows it in the sidebar footer instead. -->
 		<div class="home-sync"><SyncControl /></div>
 	</div>
 </header>
+
+{#if today.current.reportingZone && today.current.reportingZone !== deviceZone}
+	<p class="zone-note">
+		Statistics and History use {today.current.reportingZone} days.
+		<a href={resolve('/settings/time')}>Time zone settings</a>
+	</p>
+{/if}
 
 {#if clockCaution}
 	<Banner
@@ -882,7 +925,7 @@
 					><TypeTag name={currentType.name} color={currentType.color} /></button
 				>
 			{/if}
-			<p>Started {formatClock(current.start_at)}</p>
+			<p>Started {formatClock(current.start_at, deviceZone)}</p>
 			<Button
 				variant="quiet"
 				onclick={() => {
@@ -964,7 +1007,7 @@
 >
 	{#if reminderSession}
 		<p>
-			{reminderName} has been running since {formatClock(reminderSession.start_at)} ({duration(
+			{reminderName} has been running since {formatClock(reminderSession.start_at, deviceZone)} ({duration(
 				Math.round((now - reminderSession.start_at) / 60_000),
 			)}).
 		</p>
@@ -1034,6 +1077,17 @@
 </Sheet>
 
 <style>
+	.zone-note {
+		max-width: var(--ht-content-max);
+		margin: 0 0 var(--ht-space-3);
+		color: var(--ht-ink-2);
+		font: var(--ht-type-label);
+	}
+
+	.zone-note a {
+		color: var(--ht-ink);
+	}
+
 	.page-header {
 		margin-bottom: var(--ht-space-4);
 	}

@@ -35,11 +35,13 @@ export type RibbonSegment = {
 	label: string;
 };
 
-const clockFormat = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' });
-
 /** Time of day as the device locale shows it, e.g. "4:02 AM" or "16:02". */
-export function formatClock(at: number): string {
-	return clockFormat.format(at);
+export function formatClock(at: number, timeZone?: string): string {
+	return new Intl.DateTimeFormat(undefined, {
+		hour: 'numeric',
+		minute: '2-digit',
+		...(timeZone ? { timeZone } : {}),
+	}).format(at);
 }
 
 /** Position of an instant within the day, 0 at dayStart and 100 at dayEnd (not clamped). */

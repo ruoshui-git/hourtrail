@@ -5,6 +5,7 @@ import {
 	selectRecentItems,
 	todayRibbonSegments,
 	todayTotals,
+	homeDay,
 } from './domain';
 
 const type = (id: string, counts_as_work: boolean, color: 'blue' | 'gold') =>
@@ -85,6 +86,41 @@ describe('home day helpers', () => {
 				start + 60 * 60_000,
 			),
 		).toEqual({ work: 60, other: 30 });
+	});
+
+	it('uses the device calendar day and wall-clock ticks across DST boundaries', () => {
+		const instant = Date.parse('2026-11-12T02:00:00Z');
+		const today = homeDay(instant, 'America/New_York');
+		expect(today.day).toBe('2026-11-11');
+		expect(today.day).not.toBe(
+			new Intl.DateTimeFormat('en', { timeZone: 'Asia/Tokyo', dateStyle: 'short' }).format(instant),
+		);
+		for (const [day, hours] of [
+			['2026-03-08', 23],
+			['2026-11-01', 25],
+		] as const) {
+			const bounds = homeDay(Date.parse(`${day}T16:00:00Z`), 'America/New_York');
+			expect(bounds.end - bounds.start).toBe(hours * 3_600_000);
+			expect(bounds.ticks.map((tick) => tick.label)).toEqual(['12a', '6a', '12p', '6p']);
+			expect(
+				new Intl.DateTimeFormat('en', { hour: 'numeric', timeZone: 'America/New_York' }).format(
+					bounds.ticks[1]!.at,
+				),
+			).toBe('6 AM');
+		}
+	});
+
+	it('labels a New York ribbon segment in the device zone when Tokyo is the reporting zone', () => {
+		const start = Date.parse('2026-11-12T02:00:00Z');
+		const rows = todayRibbonSegments(
+			[session('a', 'work', start, start + 2 * 3_600_000)],
+			[],
+			[type('work', true, 'blue')],
+			'America/New_York',
+			'2026-11-11',
+			start + 2 * 3_600_000,
+		);
+		expect(rows[0]?.label).toContain('9:00 PM to 11:00 PM');
 	});
 
 	it('returns ribbon spans clipped to today with each session type color', () => {
