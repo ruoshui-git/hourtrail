@@ -232,7 +232,7 @@
 	</div>
 	<Button variant="secondary" onclick={useLocation}>Use my current location</Button
 	>{#if locationMessage}<p class="hint" aria-live="polite">{locationMessage}</p>{/if}
-	<Stepper label="Radius" bind:value={radius} min={25} max={2000} step={25} unit="metres" />
+	<Stepper label="Radius" bind:value={radius} min={25} max={2000} step={25} unit="meters" />
 	<!-- eslint-disable svelte/no-navigation-without-resolve -->
 	{#if parseCoordinates(`${lat},${lng}`)}<a
 			href={mapsUrl(parseCoordinates(`${lat},${lng}`)!)}

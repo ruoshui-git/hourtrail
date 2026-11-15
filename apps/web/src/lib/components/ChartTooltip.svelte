@@ -38,6 +38,7 @@
 		z-index: var(--ht-z-menu);
 		display: grid;
 		gap: var(--ht-space-1);
+		width: max-content;
 		max-width: 70%;
 		padding: var(--ht-space-2) var(--ht-space-3);
 		background: var(--ht-surface);

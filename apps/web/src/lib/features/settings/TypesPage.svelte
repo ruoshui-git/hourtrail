@@ -174,7 +174,7 @@
 				label={'Options for ' + type.name}
 				items={[
 					{ label: 'Rename', onselect: () => openEdit(type) },
-					{ label: 'Change colour', onselect: () => openEdit(type) },
+					{ label: 'Change color', onselect: () => openEdit(type) },
 					{
 						label: 'Move up',
 						disabled: active[0]?.id === type.id,
@@ -222,12 +222,12 @@
 			/>{/snippet}
 	</Field>
 	<fieldset>
-		<legend>Colour</legend>
-		<div class="palette" role="radiogroup" aria-label="Colour">
+		<legend>Color</legend>
+		<div class="palette" role="radiogroup" aria-label="Color">
 			{#each BLAZE_KEYS as key (key)}<label class="swatch" title={names[key]}>
 					<input
 						type="radio"
-						name="activity-colour"
+						name="activity-color"
 						value={key}
 						bind:group={color}
 						aria-label={names[key]}

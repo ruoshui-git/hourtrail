@@ -222,6 +222,43 @@ test('Statistics screenshots for phone and desktop, light and dark', async ({ pa
 			const prefix = `statistics-${name}-${theme.toLowerCase()}`;
 
 			await expect(page.getByRole('heading', { name: 'November 2026' })).toBeVisible();
+			if (name === 'phone') {
+				const columns = page.locator('.bar-chart .column');
+				for (const [position, index] of [
+					['left', 0],
+					['middle', 14],
+					['right', 29],
+				] as const) {
+					await columns.nth(index).hover();
+					const tooltip = page.getByRole('tooltip');
+					await expect(tooltip).toBeVisible();
+					if (position === 'right') {
+						const bounds = await tooltip.boundingBox();
+						const chartBounds = await page.locator('.bar-chart .chart').boundingBox();
+						expect(bounds).not.toBeNull();
+						expect(chartBounds).not.toBeNull();
+						expect(bounds!.width).toBeGreaterThanOrEqual(140);
+						expect(bounds!.x).toBeGreaterThanOrEqual(chartBounds!.x);
+						expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(
+							chartBounds!.x + chartBounds!.width,
+						);
+					}
+					await page.screenshot({
+						path: join(directory, `${prefix}-tooltip-${position}.png`),
+						fullPage: false,
+					});
+					await page.mouse.move(0, 0);
+				}
+			}
+			if (name === 'desktop' && theme === 'Light') {
+				await page.locator('.bar-chart .column').nth(15).hover();
+				await expect(page.getByRole('tooltip')).toBeVisible();
+				await page.screenshot({
+					path: join(directory, `${prefix}-tooltip-middle.png`),
+					fullPage: false,
+				});
+				await page.mouse.move(0, 0);
+			}
 			await page.screenshot({ path: join(directory, `${prefix}-month.png`), fullPage: true });
 
 			await page.getByRole('radio', { name: 'Week' }).click();
@@ -241,4 +278,18 @@ test('Statistics screenshots for phone and desktop, light and dark', async ({ pa
 			await page.screenshot({ path: join(directory, `${prefix}-empty.png`), fullPage: true });
 		}
 	}
+
+	await page.setViewportSize({ width: 390, height: 844 });
+	await page.goto('/settings/types');
+	await page.getByRole('button', { name: 'Options for Work' }).click();
+	await page.getByRole('menuitem', { name: 'Change color' }).click();
+	await expect(page.getByRole('radiogroup', { name: 'Color' })).toBeVisible();
+	await page.screenshot({
+		path: join(directory, 'settings-activity-types-color-picker.png'),
+		fullPage: false,
+	});
+	await page.goto('/settings/places');
+	await page.getByRole('button', { name: 'Add place' }).click();
+	await expect(page.getByRole('spinbutton', { name: 'Radius' })).toBeVisible();
+	await page.screenshot({ path: join(directory, 'settings-places-radius.png'), fullPage: false });
 });

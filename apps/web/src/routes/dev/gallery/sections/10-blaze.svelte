@@ -5,7 +5,7 @@
 
 <section>
 	<h2>Blazes and type tags</h2>
-	<p class="caption">All activity colours, in small, medium and large. Filled and archived.</p>
+	<p class="caption">All activity colors, in small, medium and large. Filled and archived.</p>
 	<div class="columns">
 		{#each BLAZE_KEYS as color (color)}<div class="sample">
 				<TypeTag name={color.charAt(0).toUpperCase() + color.slice(1)} {color} />

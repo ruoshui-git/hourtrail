@@ -117,7 +117,7 @@
 			title: column.bar.label,
 			left: ratio * 100,
 			align:
-				ratio < 0.3 ? ('start' as const) : ratio > 0.7 ? ('end' as const) : ('center' as const),
+				ratio < 0.35 ? ('start' as const) : ratio > 0.65 ? ('end' as const) : ('center' as const),
 			rows: [
 				...series.map((item) => ({
 					key: item.key,

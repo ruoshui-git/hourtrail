@@ -12,7 +12,7 @@
 <section>
 	<h2>Fields and inputs</h2>
 	<div class="columns">
-		<Field label="Work item" hint="Choose a name you will recognise."
+		<Field label="Work item" hint="Choose a name you will recognize."
 			>{#snippet children(props)}<TextInput
 					{...props}
 					value="库存管理系统开发"
