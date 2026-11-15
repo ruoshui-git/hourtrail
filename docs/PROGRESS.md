@@ -97,6 +97,8 @@ Owner asked for seven improvements after using Milestone 4. Owner decisions: Hom
 | 5.5 | Home in the device zone; History labels in `reporting_tz`; never overwrite the synced zone on sign-in | Luna high   | done (bc5bbb9; review fixes: zone note style, serialized zone bootstrap)                                             |
 | 5.6 | App badge while a session runs; opt-in Tracking push (migration 0002 adds one table)                  | Luna high   | done (48ae4c9; review fix: close the previous session's notice after Switch)                                         |
 
+Milestone 5 status (2026-11-15): all six tasks landed; full E2E passed at land; production deployed from ba72446 with migration 0002 (additive), data counts unchanged. Owner checks: the badge and the Tracking notification on the installed iPhone app (turn it on in Settings › Reminders), Home on both devices in their zones, and the Settings › Time zone choice.
+
 Notes: the full E2E suite flaked under load from parallel runs (WebKit timeouts in specs the tasks did not touch); every failure passed on isolated reruns. On phones a toast sits over the bottom of an open sheet (seen in the 5.4 test); worth a design look.
 
 ## Verification
