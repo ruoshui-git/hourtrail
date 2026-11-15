@@ -98,7 +98,12 @@ test('Switch searches, creates a named item, and Undo restores the previous sess
 		.click();
 	await expect(page.getByText('Switched to 修复洗手台')).toBeVisible();
 	await page.getByRole('button', { name: 'Undo' }).click();
-	await expect(page.getByRole('button', { name: '库存管理系统开发', exact: true })).toBeVisible();
+	await expect(
+		page.getByRole('button', {
+			name: 'Rename current session, 库存管理系统开发',
+			exact: true,
+		}),
+	).toBeVisible();
 
 	await page.getByRole('button', { name: 'Switch' }).click();
 	await page.getByRole('textbox', { name: 'Search items' }).fill('Fix the garden gate');
@@ -134,7 +139,12 @@ test('a Recent row switches the running session and offers Undo', async ({ page 
 	await page.getByRole('button', { name: 'Start Building Maintenance' }).click();
 	await expect(page.getByText('Switched to Building Maintenance')).toBeVisible();
 	await page.getByRole('button', { name: 'Undo' }).click();
-	await expect(page.getByRole('button', { name: '库存管理系统开发', exact: true })).toBeVisible();
+	await expect(
+		page.getByRole('button', {
+			name: 'Rename current session, 库存管理系统开发',
+			exact: true,
+		}),
+	).toBeVisible();
 });
 
 test('two running sessions resolve at the later start with Undo', async ({ page }) => {

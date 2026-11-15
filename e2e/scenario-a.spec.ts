@@ -7,7 +7,12 @@ test('Scenario A: one tap starts a recent item without opening a form', async ({
 	await openHome(page);
 	await page.getByRole('button', { name: 'Start 库存管理系统开发' }).click();
 	await expect(page.getByRole('button', { name: 'Stop' })).toBeVisible();
-	await expect(page.getByRole('button', { name: '库存管理系统开发', exact: true })).toBeVisible();
+	await expect(
+		page.getByRole('button', {
+			name: 'Rename current session, 库存管理系统开发',
+			exact: true,
+		}),
+	).toBeVisible();
 	await expect(page.getByRole('textbox', { name: 'Name this session' })).toHaveCount(0);
 	await expect(page.getByRole('heading', { name: 'Add session' })).toHaveCount(0);
 	await expect

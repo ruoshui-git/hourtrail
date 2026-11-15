@@ -57,4 +57,13 @@ describe('RunningPanel', () => {
 		expect(onstop).toHaveBeenCalledOnce();
 		expect(onswitch).toHaveBeenCalledOnce();
 	});
+
+	it('opens Current session from the running session name', async () => {
+		const onnameclick = vi.fn();
+		render(RunningPanel, { ...base, workItemName: '库存管理系统开发', onnameclick });
+		await fireEvent.click(
+			screen.getByRole('button', { name: 'Rename current session, 库存管理系统开发' }),
+		);
+		expect(onnameclick).toHaveBeenCalledOnce();
+	});
 });

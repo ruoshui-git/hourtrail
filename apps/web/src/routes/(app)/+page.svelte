@@ -134,8 +134,9 @@
 	let busy = $state(false);
 	let announcement = $state('');
 	let search = $state('');
-	let sheet = $state<'items' | 'types' | null>(null);
+	let sheet = $state<'items' | 'types' | 'current' | null>(null);
 	let sheetQuery = $state('');
+	let currentNameDraft = $state('');
 	let persistenceAsked = $state(false);
 	let placeSheet = $state<'name' | 'choose' | null>(null);
 	let newPlaceName = $state('');
@@ -237,6 +238,16 @@
 		current?.place_id
 			? today.current.places.find((place) => place.id === current.place_id)?.name
 			: undefined,
+	);
+	const currentNameSuggestions = $derived(
+		allItems
+			.filter(
+				(item) =>
+					item.deleted_at === null &&
+					item.archived_at === null &&
+					item.name.toLocaleLowerCase().includes(currentNameDraft.trim().toLocaleLowerCase()),
+			)
+			.slice(0, 6),
 	);
 	const placePromptSession = $derived(
 		[...daySessions].reverse().find((session) => {
@@ -483,6 +494,45 @@
 			busy = false;
 		}
 	}
+	function openCurrentSession() {
+		currentNameDraft = currentItem?.name ?? '';
+		sheet = 'current';
+	}
+	async function saveCurrentName(name = currentNameDraft) {
+		const normalized = name.trim();
+		if (busy || !current || !normalized || normalized === (currentItem?.name ?? '')) return;
+		busy = true;
+		try {
+			let item = await db.work_item
+				.where('name')
+				.equals(normalized)
+				.filter((row) => row.archived_at === null && row.deleted_at === null)
+				.first();
+			item ??= await repo.create('work_item', {
+				name: normalized,
+				description: '',
+				type_id: WORK_TYPE_ID,
+				project_id: null,
+				place_id: null,
+				pinned_at: null,
+				pin_sort: 0,
+				archived_at: null,
+			});
+			const sessionId = current.id;
+			const previousWorkItemId = current.work_item_id;
+			await repo.update('session', sessionId, { work_item_id: item.id });
+			showToast({
+				message: `Renamed to ${normalized}.`,
+				undo: async () => {
+					await repo.update('session', sessionId, { work_item_id: previousWorkItemId });
+				},
+			});
+			currentNameDraft = normalized;
+			sheet = null;
+		} finally {
+			busy = false;
+		}
+	}
 	async function startNamed(name: string) {
 		if (busy || !name.trim()) return;
 		busy = true;
@@ -655,7 +705,7 @@
 				}}
 				onname={nameCurrent}
 				ontypeclick={() => (sheet = 'types')}
-				onnameclick={() => (sheet = 'items')}
+				onnameclick={openCurrentSession}
 			/>
 		{:else}
 			<p class="status">Not tracking</p>
@@ -780,7 +830,11 @@
 
 <Sheet
 	open={sheet !== null}
-	title={sheet === 'types' ? 'Choose a type' : 'Switch activity'}
+	title={sheet === 'types'
+		? 'Choose a type'
+		: sheet === 'current'
+			? 'Current session'
+			: 'Switch activity'}
 	onclose={() => (sheet = null)}
 >
 	{#if sheet === 'types'}
@@ -788,6 +842,63 @@
 				class="choice"
 				onclick={() => chooseType(type)}><TypeTag name={type.name} color={type.color} /></button
 			>{/each}
+	{:else if sheet === 'current' && current}
+		<form
+			class="current-form"
+			onsubmit={(event) => {
+				event.preventDefault();
+				void saveCurrentName();
+			}}
+		>
+			<Field label="Name" hint="Changes this session only. Earlier sessions keep their name.">
+				{#snippet children({ id, describedBy, invalid })}
+					<TextInput bind:value={currentNameDraft} {id} {describedBy} {invalid} />
+				{/snippet}
+			</Field>
+			{#if currentNameDraft.trim() && currentNameSuggestions.length}
+				<section class="picker-list" aria-label="Suggestions">
+					{#each currentNameSuggestions as item (item.id)}
+						<button
+							type="button"
+							class="choice"
+							disabled={busy}
+							onclick={() => saveCurrentName(item.name)}>{item.name}</button
+						>
+					{/each}
+				</section>
+			{/if}
+			<Button
+				type="submit"
+				variant="primary"
+				wide
+				{busy}
+				disabled={!currentNameDraft.trim() || currentNameDraft.trim() === (currentItem?.name ?? '')}
+				>Save</Button
+			>
+		</form>
+		<div class="current-meta">
+			{#if currentType}
+				<button class="choice" onclick={() => (sheet = 'types')} aria-label="Change type"
+					><TypeTag name={currentType.name} color={currentType.color} /></button
+				>
+			{/if}
+			<p>Started {formatClock(current.start_at)}</p>
+			<Button
+				variant="quiet"
+				onclick={() => {
+					sheet = null;
+					openSessionEditor(current.id);
+				}}>Edit times…</Button
+			>
+		</div>
+		<Button
+			variant="secondary"
+			wide
+			onclick={() => {
+				sheetQuery = '';
+				sheet = 'items';
+			}}>Switch to another activity</Button
+		>
 	{:else}
 		{#if pinned.length}
 			<section class="picker-list" aria-label="Pinned">
@@ -1024,6 +1135,26 @@
 	}
 
 	.matches button,
+	.current-form {
+		display: grid;
+		gap: var(--ht-space-3);
+	}
+
+	.current-meta {
+		display: grid;
+		gap: var(--ht-space-1);
+		margin-block: var(--ht-space-4);
+		padding-block: var(--ht-space-3);
+		border-block: var(--ht-hairline) solid var(--ht-line);
+	}
+
+	.current-meta p {
+		margin: 0;
+		padding-inline: var(--ht-space-3);
+		color: var(--ht-ink-2);
+		font: var(--ht-type-label);
+	}
+
 	.choice {
 		width: 100%;
 		min-height: var(--ht-target);

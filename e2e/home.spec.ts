@@ -13,7 +13,9 @@ test('Home starts a recent item without opening an entry form', async ({ page })
 	const field = page.getByRole('textbox', { name: 'Search or name a work item' });
 	await field.fill('Existing task');
 	await page.getByRole('button', { name: 'Start “Existing task”' }).click();
-	await expect(page.getByRole('button', { name: 'Existing task', exact: true })).toBeVisible();
+	await expect(
+		page.getByRole('button', { name: 'Rename current session, Existing task', exact: true }),
+	).toBeVisible();
 	await page.getByRole('button', { name: 'Stop' }).click();
 	await expect(page.getByRole('heading', { name: 'Recent' })).toBeVisible();
 	await page.getByRole('button', { name: 'Start Existing task' }).click();
@@ -28,7 +30,9 @@ test('Home names an untitled session and Stop Undo resumes it', async ({ page })
 	const name = page.getByRole('textbox', { name: 'Name this session' });
 	await name.fill('修复洗手台');
 	await name.press('Enter');
-	await expect(page.getByRole('button', { name: '修复洗手台', exact: true })).toBeVisible();
+	await expect(
+		page.getByRole('button', { name: 'Rename current session, 修复洗手台', exact: true }),
+	).toBeVisible();
 	await page.getByRole('button', { name: 'Stop' }).click();
 	await page.getByRole('button', { name: 'Undo' }).click();
 	await expect(page.getByRole('button', { name: 'Stop' })).toBeVisible();

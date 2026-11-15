@@ -96,7 +96,12 @@
 			</Field>
 		</form>
 	{:else if onnameclick}
-		<button type="button" class="name" onclick={onnameclick}>{workItemName}</button>
+		<button
+			type="button"
+			class="name"
+			aria-label={`Rename current session, ${workItemName}`}
+			onclick={onnameclick}>{workItemName}</button
+		>
 	{:else}
 		<p class="name">{workItemName}</p>
 	{/if}
