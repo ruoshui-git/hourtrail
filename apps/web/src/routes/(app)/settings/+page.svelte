@@ -41,16 +41,13 @@
 				<span>{section}</span><ChevronRight aria-hidden="true" />
 			</a>
 		{:else if section === 'Projects'}
-			<!-- The Projects destination is being added in parallel in task 5.3. -->
-			<!-- eslint-disable svelte/no-navigation-without-resolve -- task 5.3 adds the typed route. -->
 			<a
 				class="row"
-				href="/items/projects"
+				href={resolve('/items/projects')}
 				aria-current={active === 'projects' ? 'page' : undefined}
 			>
 				<span>{section}</span><ChevronRight aria-hidden="true" />
 			</a>
-			<!-- eslint-enable svelte/no-navigation-without-resolve -->
 		{:else if section === 'Time zone and week start'}
 			<a
 				class="row"

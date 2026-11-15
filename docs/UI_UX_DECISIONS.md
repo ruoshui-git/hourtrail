@@ -28,7 +28,7 @@ Durable screen layouts, flows and interaction decisions. Visual rules live in [D
 ```
 
 - Idle: the Start button begins an untitled session. Tapping a pinned or recent row starts that item at once. Typing in the field filters items; Enter on a new name creates the item (default type Work) and starts it.
-- Running: tapping a row, or Switch, switches. The TypeTag opens a type picker. The name opens the item picker. A session can be named, typed and noted at any time without stopping it.
+- Running: tapping a row, or Switch, switches. The TypeTag opens a type picker. The name opens the Current session sheet (task 5.4): a name field with suggestions that reassigns only this session to an existing or new work item (earlier sessions keep their name; the item itself is not renamed), with Undo; the type; the start time with Edit times…; and Switch to another activity. A session can be named, typed and noted at any time without stopping it.
 - After Stop: a toast "Stopped at 7:00 AM. 2h 58m" with Undo and "Add note", which opens the session editor. Nothing is required.
 - On desktop the running panel and today's summary sit in a left column and the item lists in a right column.
 
@@ -43,9 +43,9 @@ Work item picker, type, start and end (`datetime-local`), computed duration, not
 
 ## Items, Reports, Settings
 
-- **Items**: search, pinned first, then active items grouped by project, with an archived section. The item page shows its fields, total time and its sessions.
+- **Items**: search, pinned first, then active items grouped by project, with an archived section. The item page shows its fields, total time and its sessions. The header links to **Projects** (`/items/projects`, task 5.3): active projects with item count and this month's time, a No project row, and an archived section; New project, and a project page with Rename (sheet), Archive or Unarchive, Delete (only when no work item references it, with undo), and Move to… or Add items to move work items in and out. An item in an archived project shows it as "{name} (archived)" in its picker.
 - **Reports**: a segmented range control, the headline figure "Work hours" with other types beside it, the bar chart by day, breakdown tabs (Work items, Projects, Places), then "Create report", which opens the report builder with a live print preview and Export (Print, CSV, Excel).
-- **Settings**: Activity types (reorder, colour, counts as work, reminders, archive), Places, Reminders, Cloud and devices (sync state, link a device, revoke), Privacy (location capture, raw coordinates), Backup (download, restore, last nightly backup), Appearance (system, light, dark), Time zone and week start, Deleted sessions, About.
+- **Settings**: Activity types (reorder, color, counts as work, reminders, archive), Places, Reminders, Cloud and devices (sync state, link a device, revoke), Privacy (location capture, raw coordinates), Backup (download, restore, last nightly backup), Appearance (system, light, dark), Time zone and week start (the synced reporting zone with its offset, "Use this device's time zone", a searchable zone list, Monday or Sunday), Deleted sessions (newest deletion first, Restore), About (version and build, storage, sign-in, last backup), plus a Projects row linking to `/items/projects` (task 5.2).
 
 ## Cloud and devices (Settings → Cloud and devices, `/settings/cloud`; `/link`)
 
@@ -111,6 +111,10 @@ Decided 2026-11-13.
 
 One line per behaviour change, newest first: `YYYY-MM-DD task-id: what changed and why`.
 
+- 2026-11-15 5.4: Tapping the running session's name opens a Current session sheet that renames this session only (reassigning it to another or a new work item, with Undo) and still offers Switch; rows and the Switch button keep switching instantly. Owner request.
+- 2026-11-15 5.3: Items gains a Projects screen and project pages (create, rename in a sheet, archive, unarchive, delete when unused, move items). Owner request: projects were hard to manage.
+- 2026-11-15 5.2: Settings' three "Coming soon" rows are now pages: Time zone and week start, Deleted sessions (restore), About; Settings links to Projects. Owner request.
+- 2026-11-15 5.1: UI copy is American English throughout (a unit test now fails on British spellings); the Statistics chart tooltip sizes to its content instead of squeezing near the right edge. Owner feedback.
 - 2026-11-15 5.6: Settings → Reminders can opt in to a cloud `Tracking` notice after a session syncs; the app badge and tagged notice clear when the session stops on this device, so the owner can see that tracking is active while the app is closed.
 - 2026-11-13 4.6: Polish: durations read 2h 05m (or decimal) everywhere and follow the setting; sheets and dialogs manage focus and close on Escape; Start, Stop, Switch and sync state are announced; date-only fields use the new DateInput; empty states say what to do next; the builder no longer repeats the group column; the restore summary lists only non-zero counts.
 - 2026-11-13 4.5: Settings > Reminders turns on forgotten-session reminders (threshold, repeats, per-type), and notifications per device; the service worker shows them and a tap opens Home's Still working sheet (Keep running, Stop now, Stop at...), which also appears once on opening the app past the threshold.

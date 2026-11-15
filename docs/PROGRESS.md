@@ -84,6 +84,21 @@ Gate 2 status (2026-11-12): automated part passed (scenario E with mocked geoloc
 
 **Gate 4 status (2026-11-13):** automated part passed: the full E2E suite (A–L regression, all scenario specs) and 883 unit and Worker tests on 19e8f90. Remaining for the owner: a real reminder push on the installed iPhone app, and a monthly report printed and opened in Excel with Chinese intact; then the 4.6 review.
 
+## Milestone 5: owner feedback (2026-11-15)
+
+Owner asked for seven improvements after using Milestone 4. Owner decisions: Home follows the device's time zone while History, Statistics and reports keep `reporting_tz`; renaming the running session reassigns only that session; Recent and Pinned rows keep their instant switch; build both the app badge and an opt-in Tracking notification; Codex Luna only (Claude Haiku if Codex runs out), no wall-clock kills, only stuck detection.
+
+| ID  | Task                                                                                                  | Who         | Status                                                                                                               |
+| --- | ----------------------------------------------------------------------------------------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------- |
+| 5.1 | American English sweep and a British-spelling guard test; Statistics tooltip width                    | Luna medium | done (74c1088)                                                                                                       |
+| 5.2 | Settings: Time zone and week start, Deleted sessions, About (no more "Coming soon"); Projects link    | Luna high   | done (4ba1153; review fixes: zone search uses Field/TextInput, readable build time)                                  |
+| 5.3 | Projects screen and project pages: create, rename, archive, unarchive, delete when unused, move items | Luna high   | done (7e9c5a5; one fix round: row width, delete hint, toast copy)                                                    |
+| 5.4 | Home: Current session sheet renames the running session; Switch kept                                  | Luna high   | done (cf62208; review fixes: Undo bound to the session, sheet layout, untitled affordance, selectors in other specs) |
+| 5.5 | Home in the device zone; History labels in `reporting_tz`; never overwrite the synced zone on sign-in | Luna high   | active (5.5-home-timezone)                                                                                           |
+| 5.6 | App badge while a session runs; opt-in Tracking push (migration 0002 adds one table)                  | Luna high   | done (48ae4c9; review fix: close the previous session's notice after Switch)                                         |
+
+Notes: the full E2E suite flaked under load from parallel runs (WebKit timeouts in specs the tasks did not touch); every failure passed on isolated reruns. On phones a toast sits over the bottom of an open sheet (seen in the 5.4 test); worth a design look.
+
 ## Verification
 
 Commands (define them in the root `package.json`): `pnpm check` (format, lint, types, unit tests), `pnpm build`, `pnpm e2e` (Playwright, Chromium and WebKit iPhone profile, against `wrangler dev` with a fresh local D1), `pnpm shots` (fixed screenshot set: every route at 390×844 and 1280×800, light and dark, with Chinese seed data). CI runs `check`, `build` and `e2e` on every push and deploys `main` to staging.
