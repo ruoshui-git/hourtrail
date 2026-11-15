@@ -19,6 +19,7 @@
 	import { showToast } from '$lib/components/toasts.svelte';
 	import { formatMinutes } from '$lib/format';
 	import { WORK_TYPE_ID } from '@hourtrail/core';
+	import { validateProjectName } from '$lib/features/projects/domain';
 	let now = $state(Date.now());
 	const timer = setInterval(() => (now = Date.now()), 30_000);
 	onDestroy(() => clearInterval(timer));
@@ -35,7 +36,7 @@
 			return {
 				item,
 				types: types.filter((x) => !x.deleted_at && !x.archived_at),
-				projects: projects.filter((x) => !x.deleted_at && !x.archived_at),
+				projects: projects.filter((x) => !x.deleted_at),
 				sessions: sessions.filter((x) => !x.deleted_at).sort((a, b) => b.start_at - a.start_at),
 				durationFormat: readSetting('duration_format', durationSetting?.value) ?? 'hm',
 			};
@@ -46,6 +47,8 @@
 	let description = $state('');
 	let typeId = $state(WORK_TYPE_ID);
 	let projectId = $state('');
+	let projectName = $state('');
+	let projectError = $state('');
 	let pinned = $state(false);
 	let initialized = $state(false);
 	let saved = $state(false);
@@ -67,11 +70,24 @@
 	async function save() {
 		const item = data.current.item;
 		if (!item || !name.trim()) return;
+		let nextProjectId = projectId || null;
+		if (projectId === '__new__') {
+			const validation = validateProjectName(projectName, data.current.projects);
+			if (!validation.ok) {
+				projectError = validation.error;
+				return;
+			}
+			nextProjectId = (await repo.create('project', { name: validation.name, archived_at: null }))
+				.id;
+			projectId = nextProjectId;
+			projectName = '';
+			projectError = '';
+		}
 		await repo.update('work_item', item.id, {
 			name: name.trim(),
 			description,
 			type_id: typeId,
-			project_id: projectId || null,
+			project_id: nextProjectId,
 			pinned_at: pinned ? (item.pinned_at ?? Date.now()) : null,
 			pin_sort: pinned ? item.pin_sort : 0,
 		});
@@ -134,10 +150,24 @@
 					bind:value={projectId}
 					options={[
 						{ value: '', label: 'No project' },
-						...data.current.projects.map((x) => ({ value: x.id, label: x.name })),
+						...data.current.projects
+							.filter((x) => !x.archived_at)
+							.map((x) => ({ value: x.id, label: x.name })),
+						...data.current.projects
+							.filter((x) => x.archived_at && x.id === data.current.item?.project_id)
+							.map((x) => ({ value: x.id, label: `${x.name} (archived)` })),
+						{ value: '__new__', label: 'New project…' },
 					]}
 				/>{/snippet}</Field
 		>
+		{#if projectId === '__new__'}<Field label="New project name" error={projectError}
+				>{#snippet children({ id, describedBy, invalid })}<TextInput
+						{id}
+						bind:value={projectName}
+						{describedBy}
+						{invalid}
+					/>{/snippet}</Field
+			>{/if}
 		<Switch label="Pinned" bind:checked={pinned} />
 	</div>
 	<section>

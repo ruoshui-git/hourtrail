@@ -19,6 +19,7 @@
 		ConfirmDialog,
 	} from '$lib/components';
 	import { showToast } from '$lib/components/toasts.svelte';
+	import { validateProjectName } from '$lib/features/projects/domain';
 	import type { RecordOf } from '@hourtrail/core';
 	let search = $state('');
 	let adding = $state(false);
@@ -29,6 +30,9 @@
 	let projectName = $state('');
 	let archivedOpen = $state(false);
 	let projectEdit = $state<RecordOf<'project'> | null>(null);
+	let renameOpen = $state(false);
+	let renameValue = $state('');
+	let renameError = $state('');
 	let confirmProject = $state(false);
 	const initial = {
 		items: [] as RecordOf<'work_item'>[],
@@ -109,18 +113,33 @@
 		const result = running
 			? await repo.switchTo({ workItemId: item.id })
 			: await repo.start({ workItemId: item.id });
-		showToast({ message: `Started ${item.name}`, undo: () => repo.undo(result.undo) });
+		showToast({ message: `Started ${item.name}.`, undo: () => repo.undo(result.undo) });
 	}
 	async function projectAction(label: string) {
 		if (!projectEdit) return;
 		const project = projectEdit;
 		if (label === 'Rename') {
-			const next = prompt('Project name', project.name);
-			if (next?.trim()) await repo.update('project', project.id, { name: next.trim() });
+			renameValue = project.name;
+			renameError = '';
+			renameOpen = true;
 		} else {
 			await repo.update('project', project.id, { archived_at: Date.now() });
+			projectEdit = null;
+			snapshot = await loadData();
 		}
+	}
+	async function renameProject() {
+		if (!projectEdit) return;
+		const result = validateProjectName(renameValue, snapshot.projects, projectEdit.id);
+		if (!result.ok) {
+			renameError = result.error;
+			return;
+		}
+		await repo.update('project', projectEdit.id, { name: result.name });
 		projectEdit = null;
+		renameOpen = false;
+		snapshot = await loadData();
+		showToast({ message: 'Project renamed.' });
 	}
 </script>
 
@@ -130,7 +149,10 @@
 		<h1>Items</h1>
 		<p>Reusable activities and projects</p>
 	</div>
-	<Button icon={Plus} onclick={() => (adding = true)}>Add work item</Button>
+	<div class="heading-actions">
+		<Button variant="quiet" onclick={() => goto(resolve('/items/projects'))}>Projects</Button
+		><Button icon={Plus} onclick={() => (adding = true)}>Add work item</Button>
+	</div>
 </header>
 <div class="search">
 	<Field label="Search work items"
@@ -182,10 +204,17 @@
 						label={`Options for ${project.name}`}
 						items={[
 							{
-								label: 'Rename',
+								label: 'Open project',
+								onselect: () => goto(resolve(`/items/projects/${project.id}`)),
+							},
+							{
+								label: 'Rename project',
 								icon: Pencil,
 								onselect: () => {
 									projectEdit = project;
+									renameValue = project.name;
+									renameError = '';
+									renameOpen = true;
 								},
 							},
 							{
@@ -301,6 +330,24 @@
 	confirmLabel="Archive project"
 	onconfirm={() => projectAction('Archive')}
 />
+<Sheet bind:open={renameOpen} title="Rename project" onclose={() => (renameError = '')}>
+	<form
+		onsubmit={(event) => {
+			event.preventDefault();
+			void renameProject();
+		}}
+	>
+		<Field label="Name" error={renameError}
+			>{#snippet children({ id, describedBy, invalid })}<TextInput
+					{id}
+					bind:value={renameValue}
+					{describedBy}
+					{invalid}
+				/>{/snippet}</Field
+		>
+		<Button type="submit" wide>Save name</Button>
+	</form>
+</Sheet>
 
 <style>
 	.heading {
@@ -325,6 +372,12 @@
 	.heading p {
 		color: var(--ht-ink-2);
 		font: var(--ht-type-label);
+	}
+
+	.heading-actions {
+		display: flex;
+		align-items: center;
+		gap: var(--ht-space-2);
 	}
 
 	section {

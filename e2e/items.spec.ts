@@ -22,7 +22,7 @@ test('work items keep session identity and type history through edits and archiv
 	await page.getByRole('button', { name: 'Items' }).click();
 	await page.getByLabel('Search work items').fill('库存');
 	await page.getByRole('button', { name: 'Start 库存管理系统开发' }).click();
-	await expect(page.getByText('Started 库存管理系统开发')).toBeVisible();
+	await expect(page.getByText('Started 库存管理系统开发.', { exact: true })).toBeVisible();
 	const before = await page.evaluate(async () => {
 		const request = indexedDB.open('hourtrail');
 		const db = await new Promise<IDBDatabase>((resolve, reject) => {
