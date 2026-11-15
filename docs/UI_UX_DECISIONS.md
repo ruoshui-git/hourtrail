@@ -111,6 +111,7 @@ Decided 2026-11-13.
 
 One line per behaviour change, newest first: `YYYY-MM-DD task-id: what changed and why`.
 
+- 2026-11-15 5.5: Home shows the day of the device in hand (ribbon, totals, heading and times in its zone), with a quiet note when Statistics and History use another zone; History's times follow the reporting zone and its banner offers "Use {device zone}". Owner report: one of two devices in different zones showed a wrong timeline.
 - 2026-11-15 5.4: Tapping the running session's name opens a Current session sheet that renames this session only (reassigning it to another or a new work item, with Undo) and still offers Switch; rows and the Switch button keep switching instantly. Owner request.
 - 2026-11-15 5.3: Items gains a Projects screen and project pages (create, rename in a sheet, archive, unarchive, delete when unused, move items). Owner request: projects were hard to manage.
 - 2026-11-15 5.2: Settings' three "Coming soon" rows are now pages: Time zone and week start, Deleted sessions (restore), About; Settings links to Projects. Owner request.
