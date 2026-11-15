@@ -25,4 +25,7 @@ export const SHOT_ROUTES: ShotRoute[] = [
 	{ name: 'gallery-menu', path: '/dev/gallery?open=menu' },
 	{ name: 'settings-types', path: '/settings/types' },
 	{ name: 'settings-appearance', path: '/settings/appearance' },
+	{ name: 'settings-time', path: '/settings/time' },
+	{ name: 'settings-deleted', path: '/settings/deleted' },
+	{ name: 'settings-about', path: '/settings/about' },
 ];

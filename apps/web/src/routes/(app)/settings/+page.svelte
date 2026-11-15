@@ -5,6 +5,7 @@
 	const sections = [
 		'Activity types',
 		'Places',
+		'Projects',
 		'Reminders',
 		'Cloud and devices',
 		'Privacy',
@@ -36,6 +37,41 @@
 				class="row"
 				href={resolve('/settings/places')}
 				aria-current={active === 'places' ? 'page' : undefined}
+			>
+				<span>{section}</span><ChevronRight aria-hidden="true" />
+			</a>
+		{:else if section === 'Projects'}
+			<!-- The Projects destination is being added in parallel in task 5.3. -->
+			<!-- eslint-disable svelte/no-navigation-without-resolve -- task 5.3 adds the typed route. -->
+			<a
+				class="row"
+				href="/items/projects"
+				aria-current={active === 'projects' ? 'page' : undefined}
+			>
+				<span>{section}</span><ChevronRight aria-hidden="true" />
+			</a>
+			<!-- eslint-enable svelte/no-navigation-without-resolve -->
+		{:else if section === 'Time zone and week start'}
+			<a
+				class="row"
+				href={resolve('/settings/time')}
+				aria-current={active === 'time' ? 'page' : undefined}
+			>
+				<span>{section}</span><ChevronRight aria-hidden="true" />
+			</a>
+		{:else if section === 'Deleted sessions'}
+			<a
+				class="row"
+				href={resolve('/settings/deleted')}
+				aria-current={active === 'deleted' ? 'page' : undefined}
+			>
+				<span>{section}</span><ChevronRight aria-hidden="true" />
+			</a>
+		{:else if section === 'About'}
+			<a
+				class="row"
+				href={resolve('/settings/about')}
+				aria-current={active === 'about' ? 'page' : undefined}
 			>
 				<span>{section}</span><ChevronRight aria-hidden="true" />
 			</a>
@@ -79,8 +115,6 @@
 			>
 				<span>{section}</span><ChevronRight aria-hidden="true" />
 			</a>
-		{:else}
-			<div class="row unavailable"><span>{section}</span><span>Coming soon</span></div>
 		{/if}
 	{/each}
 </nav>
@@ -123,14 +157,6 @@
 		width: var(--ht-icon);
 		height: var(--ht-icon);
 		flex: none;
-	}
-
-	.unavailable {
-		color: var(--ht-ink-2);
-	}
-
-	.unavailable span:last-child {
-		font: var(--ht-type-label);
 	}
 
 	a:focus-visible {
